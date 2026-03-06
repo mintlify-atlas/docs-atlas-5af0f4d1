@@ -1,0 +1,413 @@
+---
+title: Vector Calculations
+description: Utility skills for distance, direction, velocity, and location vector calculations
+---
+
+## Overview
+
+The **Vector Skills** provide reusable utilities for common vector operations. These are essential building blocks for custom mechanics that need to calculate positions, directions, distances, or entity velocities.
+
+<Note>
+  These skills serve as reference implementations for building custom handlers. They demonstrate best practices for vector manipulation in MythicMobs.
+</Note>
+
+## Distance Calculations
+
+### 3D Distance
+
+Calculates the straight-line distance between origin and target.
+
+```yaml
+my_skill:
+  Skills:
+  - skill:distance{origin=@selfEyeLocation} @targetLocation
+  - message{m="Distance: <skill.var.distance>"} @self
+```
+
+**Returns:** `<skill.var.distance>` (float)
+
+#### Implementation
+
+```yaml
+distance:
+  Skills:
+  - setvarloc{var=origin_loc;val=@origin}
+  - setvarloc{var=target_loc;val=@targetedlocation}
+  
+  - setvar{var=vector_x;val="<skill.var.target_loc.x>-<skill.var.origin_loc.x>";type=FLOAT}
+  - setvar{var=vector_y;val="<skill.var.target_loc.y>-<skill.var.origin_loc.y>";type=FLOAT}
+  - setvar{var=vector_z;val="<skill.var.target_loc.z>-<skill.var.origin_loc.z>";type=FLOAT}
+  
+  - setvar{var=distance_vec;type=VECTOR;val=<skill.var.vector_x>,<skill.var.vector_y>,<skill.var.vector_z>}
+  
+  - setvar{var=distance;type=FLOAT;
+      val="sqrt(abs((<skill.var.distance_vec.x>)^2+(<skill.var.distance_vec.y>)^2+(<skill.var.distance_vec.z>)^2))"}
+```
+
+### Horizontal Distance
+
+Calculates distance ignoring vertical difference.
+
+```yaml
+my_skill:
+  Skills:
+  - skill:distance-horizontal{origin=@selfLocation} @targetLocation
+  - message{m="Horizontal distance: <skill.var.distance_horizontal>"} @self
+```
+
+**Returns:** `<skill.var.distance_horizontal>` (float)
+
+#### Implementation
+
+```yaml
+distance-horizontal:
+  Skills:
+  - setvarloc{var=origin_loc;val=@origin}
+  - setvarloc{var=target_loc;val=@targetedlocation}
+  
+  - setvar{var=vector_x;val="<skill.var.target_loc.x>-<skill.var.origin_loc.x>";type=FLOAT}
+  - setvar{var=vector_z;val="<skill.var.target_loc.z>-<skill.var.origin_loc.z>";type=FLOAT}
+  
+  - setvar{var=distance_vec;type=VECTOR;val=<skill.var.vector_x>,0,<skill.var.vector_z>}
+  
+  - setvar{var=distance_horizontal;type=FLOAT;
+      val="sqrt(abs((<skill.var.distance_vec.x>)^2+(<skill.var.distance_vec.z>)^2))"}
+```
+
+### Vertical Distance
+
+Calculates only the Y-axis difference.
+
+```yaml
+my_skill:
+  Skills:
+  - skill:distance-vertical{origin=@selfLocation} @targetLocation
+  - message{m="Height difference: <skill.var.distance_vertical>"} @self
+```
+
+**Returns:** `<skill.var.distance_vertical>` (float)
+
+#### Implementation
+
+```yaml
+distance-vertical:
+  Skills:
+  - setvarloc{var=origin_loc;val=@origin}
+  - setvarloc{var=target_loc;val=@targetedlocation}
+  
+  - setvar{var=vector_y;val="<skill.var.target_loc.y>-<skill.var.origin_loc.y>";type=FLOAT}
+  - setvar{var=distance_vertical;type=FLOAT;val="<skill.var.vector_y>"}
+```
+
+## Direction Vectors
+
+Gets the normalized direction vector from origin to target.
+
+### Basic Usage
+
+```yaml
+my_skill:
+  Skills:
+  - skill:get_direction_vector{origin=@selflocation;vec=facing} @forward{f=12}
+  # Result stored in <skill.var.facing_vec>
+  - e:pl{fo=true;origin=@variableLocation{var=origin_loc};p=spark;a=1}
+    @variableLocation{var=target_loc}
+```
+
+### Parameters
+
+<ParamField path="origin" type="location" required>
+  The origin location
+</ParamField>
+
+<ParamField path="vec" type="string" default="direction">
+  Variable name prefix for the result vector
+</ParamField>
+
+**Returns:** `<skill.var.[vec]_vec>` (normalized vector)
+
+Also sets:
+- `<skill.var.origin_loc>` - Origin location
+- `<skill.var.target_loc>` - Target location
+- `<skill.var.origin_vec>` - Origin as vector
+- `<skill.var.target_vec>` - Target as vector
+
+### Implementation
+
+```yaml
+get_direction_vector:
+  Skills:
+  - skill:get_location_vector{vec=origin} @origin
+  - skill:get_location_vector{vec=target} @targetedlocation
+  
+  - setvar{var=vec;val=<skill.vec|direction>;type=STRING}
+  - setvar{var=<skill.var.vec>_vec;
+      val=<skill.var.target_vec.sub.<skill.var.origin_vec>.normalized>;
+      t=VECTOR}
+```
+
+### Example: Custom Projectile Direction
+
+```yaml
+curved_projectile:
+  Skills:
+  - skill:get_direction_vector{origin=@selflocation;vec=base_dir} @target
+  - setvar{var=offset_dir;val=<skill.var.base_dir_vec.rotate.y.0.5>;type=VECTOR} @self
+  - setvarloc{var=curve_target;
+      val=@selflocation{
+        xo=<caster.var.offset_dir.x.mul.10>;
+        yo=<caster.var.offset_dir.y.mul.10>;
+        zo=<caster.var.offset_dir.z.mul.10>
+      }} @self
+  - projectile{v=40} @variablelocation{var=curve_target}
+```
+
+## Location Vectors
+
+Converts a location to a vector representation.
+
+### Basic Usage
+
+```yaml
+my_skill:
+  Skills:
+  - skill:get_location_vector{vec=target} @selflocation
+  # Result: <skill.var.target_vec> and <skill.var.target_loc>
+```
+
+### Parameters
+
+<ParamField path="vec" type="string" default="location">
+  Variable name prefix for the result
+</ParamField>
+
+**Returns:**
+- `<skill.var.[vec]_loc>` - Location object
+- `<skill.var.[vec]_vec>` - Location as vector (coordinates)
+
+### Implementation
+
+```yaml
+get_location_vector:
+  Skills:
+  - setvar{var=vec;val=<skill.vec|location>;type=STRING}
+  - setvarloc{var=<skill.var.vec>_loc;val=@targetedlocation}
+  - setvar{var=<skill.var.vec>_vec;val=<skill.var.<skill.var.vec>_loc.coords>;t=VECTOR}
+```
+
+## Velocity Tracking
+
+Tracks entity velocity over time (requires multiple ticks).
+
+### Basic Usage
+
+```yaml
+velocity_tracker:
+  Skills:
+  - aura{d=100;i=1;ot=get_velocity_vector} @self
+
+velocity_display:
+  Skills:
+  - message{m="Speed: <skill.var.speed>"} @self
+  - message{m="Velocity: <skill.var.velocity>"} @self
+```
+
+**Returns:**
+- `<skill.var.velocity>` - Velocity vector (change per tick)
+- `<skill.var.speed>` - Magnitude of velocity (float)
+
+### Implementation
+
+```yaml
+get_velocity_vector:
+  Skills:
+  # Store previous location
+  - skill:get_location_vector{vec=prior} @LOT ?!varisset{var=prior_vec}
+  
+  # Get current location
+  - skill:get_location_vector{vec=current} @LOT
+  
+  # Calculate velocity (current - prior)
+  - setvar{var=velocity;val=<skill.var.current_vec.sub.<skill.var.prior_vec>>;t=VECTOR}
+  
+  # Calculate speed (magnitude)
+  - setvar{var=speed;
+      val=sqrt(abs((<skill.var.velocity.x>)^2+(<skill.var.velocity.y>)^2+(<skill.var.velocity.z>)^2));
+      t=FLOAT}
+  
+  # Update prior location
+  - skill:get_location_vector{vec=prior} @variableLocation{var=current_loc}
+```
+
+### Example: Speed-Based Damage
+
+```yaml
+speed_damage:
+  Skills:
+  - aura{d=40;i=1;ot=speed_check} @self
+  - propel{v=3} @forward{f=12}
+
+speed_check:
+  Skills:
+  - skill:get_velocity_vector
+  - damage{a="<skill.var.speed>*20"} @EntitiesInRadius{r=3} ~varinrange{var=speed;val=>0.5}
+```
+
+## Combined Examples
+
+### Distance-Based Scaling
+
+```yaml
+distance_damage:
+  Skills:
+  - skill:distance{origin=@selfLocation} @target
+  - setvar{var=damage_mult;val="1+<skill.var.distance>/10";type=FLOAT} @self
+  - damage{a="20*<caster.var.damage_mult>"} @target
+  - message{m="Distance: <skill.var.distance>, Damage: <caster.var.damage_mult>x"} @self
+```
+
+### Pull Toward Caster
+
+```yaml
+pull_skill:
+  Skills:
+  - skill:get_direction_vector{origin=@target;vec=pull} @selfLocation
+  - throw{
+      velocity="<skill.var.pull_vec.x>*2";
+      velocityY="<skill.var.pull_vec.y>*2+0.3";
+      velocityZ="<skill.var.pull_vec.z>*2"
+    } @target
+```
+
+### Line Effect Between Points
+
+```yaml
+connecting_beam:
+  Skills:
+  - skill:get_direction_vector{origin=@selfLocation;vec=beam} @target
+  - skill:distance{origin=@selfLocation} @target
+  - foreach{s=beam_particle;repeat="<skill.var.distance>*4"} @line{fo=true;r=0.25}
+
+beam_particle:
+  Skills:
+  - e:p{p=end_rod;a=1}
+  - e:p{p=electric_spark;a=2}
+```
+
+### Perpendicular Offset
+
+```yaml
+side_dash:
+  Skills:
+  - skill:get_direction_vector{origin=@selfLocation;vec=forward} @forward{f=5}
+  # Rotate 90 degrees to get perpendicular direction
+  - setvar{var=side_vec;val=<skill.var.forward_vec.rotate.y.1.5708>;type=VECTOR} @self
+  - setvarloc{var=dash_target;
+      val=@selfLocation{
+        xo=<caster.var.side_vec.x.mul.8>;
+        yo=<caster.var.side_vec.y.mul.8>;
+        zo=<caster.var.side_vec.z.mul.8>
+      }} @self
+  - teleport @variableLocation{var=dash_target}
+```
+
+## Test Skills
+
+The pack includes test implementations:
+
+```yaml
+test-distance:
+  Skills:
+  - skill:distance{origin=@selfEyeLocation} @targetLocation
+
+test-get_location_vector:
+  Skills:
+  - skill:get_location_vector{vec=target} @selflocation
+
+test-get_direction_vector:
+  Skills:
+  - skill:get_direction_vector{origin=@selflocation;vec=facing} @forward{f=12}
+  - e:pl{fo=true;origin=@variableLocation{var=origin_loc};p=spark;a=1}
+    @variableLocation{var=target_loc}
+
+test-get_velocity_vector:
+  Skills:
+  - propel{v=3} @forward{f=12}
+  - aura{d=100;i=1;ot=get_velocity_vector} @self
+```
+
+## Technical Notes
+
+### Vector Rotation
+
+MythicMobs supports vector rotation:
+
+```yaml
+# Rotate around Y-axis by 45 degrees (0.7854 radians)
+- setvar{var=rotated;val=<skill.var.direction_vec.rotate.y.0.7854>;type=VECTOR}
+
+# Rotate around X-axis
+- setvar{var=rotated;val=<skill.var.direction_vec.rotate.x.1.5708>;type=VECTOR}
+
+# Rotate around Z-axis
+- setvar{var=rotated;val=<skill.var.direction_vec.rotate.z.3.1416>;type=VECTOR}
+```
+
+<Note>
+  Rotation values are in **radians**, not degrees. Use `toradian()` if needed, or common values:
+  - 90° = 1.5708 radians
+  - 45° = 0.7854 radians
+  - 180° = 3.1416 radians
+</Note>
+
+### Vector Operations
+
+```yaml
+# Addition
+- setvar{var=sum;val=<skill.var.vec1.add.<skill.var.vec2>>;type=VECTOR}
+
+# Subtraction
+- setvar{var=diff;val=<skill.var.vec1.sub.<skill.var.vec2>>;type=VECTOR}
+
+# Multiplication (scalar)
+- setvar{var=scaled;val=<skill.var.vec1.mul.2.5>;type=VECTOR}
+
+# Normalization
+- setvar{var=normalized;val=<skill.var.vec1.normalized>;type=VECTOR}
+
+# Component access
+- setvar{var=x;val=<skill.var.vec1.x>;type=FLOAT}
+- setvar{var=y;val=<skill.var.vec1.y>;type=FLOAT}
+- setvar{var=z;val=<skill.var.vec1.z>;type=FLOAT}
+```
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Distance Checks" icon="ruler">
+    Conditional effects based on range
+  </Card>
+  <Card title="Directional Mechanics" icon="compass">
+    Calculate facing directions and offsets
+  </Card>
+  <Card title="Velocity Systems" icon="gauge">
+    Track movement speed for mechanics
+  </Card>
+  <Card title="Custom Targeting" icon="crosshairs">
+    Build advanced targeting systems
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<Tip>
+  **Normalize direction vectors** before using them for movement or offsets to ensure consistent behavior regardless of distance.
+</Tip>
+
+<Tip>
+  **Cache calculations**: Store frequently-used vectors in variables rather than recalculating them.
+</Tip>
+
+<Warning>
+  Velocity tracking requires at least 2 ticks to return accurate results. The first call initializes the prior position.
+</Warning>

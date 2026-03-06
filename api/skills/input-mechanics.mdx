@@ -1,0 +1,310 @@
+---
+title: Input Mechanics API
+description: API reference for input mechanics in IonTech's Modular Systems
+---
+
+Input mechanics provide advanced player input detection and combo systems for MythicMobs.
+
+## Click Combo System
+
+The click combo system allows you to create complex input sequences for spell casting.
+
+### click_combo
+
+Main entry point for click combo mechanics.
+
+<ParamField path="duration" type="number" default="5">
+  Duration in seconds for input window
+</ParamField>
+
+<ParamField path="type" type="string" default="NORMAL">
+  Combo type: `NORMAL`, `QUICK`, `WYNN_WAND`, `WYNN_WEAPON`
+</ParamField>
+
+<ParamField path="debug" type="boolean" default="false">
+  Enable debug messages
+</ParamField>
+
+### Click Combo Types
+
+#### NORMAL
+Standard 3-input combo system with visual indicators.
+- Shows "「」「」「」" subtitle display
+- Accepts LEFT, RIGHT, DROP, SWAP inputs
+- 3 maximum inputs (`input_counter_max=3`)
+
+#### QUICK
+2-input quick-cast combo for faster spell execution.
+- Shows "「」「」" subtitle display  
+- Starts with SWAP input automatically
+- 2 maximum inputs (`input_counter_max=2`)
+- Supports crouch modifier for extended combos
+
+#### WYNN_WAND
+Wynncraft-style wand casting (right-click focused).
+- Starts with RIGHT input
+- 3 maximum inputs
+- No visual subtitle by default
+
+#### WYNN_WEAPON
+Wynncraft-style weapon casting (left-click focused).
+- Starts with LEFT input
+- 3 maximum inputs
+- No visual subtitle by default
+
+### Input Detection
+
+**click_combo-sendinput**
+
+Detects and processes player inputs.
+
+<ParamField path="key" type="string" required>
+  Input key: `LEFT`, `RIGHT`, `DROP`, `SWAP`
+</ParamField>
+
+### Execution
+
+**click_combo-executeskill**
+
+Executes the skill associated with the completed input combo.
+
+- Checks if `input_counter` matches `input_counter_max`
+- Plays success sound (experience_orb.pickup)
+- Displays green success subtitle
+- Executes skill from `skill.<input_combo>` parameter
+
+### Variables
+
+<ParamField path="caster.input" type="string">
+  Raw input string (e.g., "LRL" for LEFT+RIGHT+LEFT)
+</ParamField>
+
+<ParamField path="caster.display_input" type="string">
+  Formatted display string with visual characters
+</ParamField>
+
+<ParamField path="caster.input_counter" type="integer">
+  Current number of inputs entered
+</ParamField>
+
+<ParamField path="caster.input_counter_max" type="integer">
+  Maximum inputs allowed (2-3 depending on type)
+</ParamField>
+
+### Force Interrupt
+
+**click_combo-force_end**
+
+Forces combo to end (triggered by stun or manual cancel).
+
+- Displays red "Interrupted!" message
+- Clears all combo variables
+- Removes clickcombo-input aura
+
+## Combo System
+
+Simple combo counter for melee attacks.
+
+### combo-apply
+
+<ParamField path="maxcombo" type="integer" default="3">
+  Maximum combo count
+</ParamField>
+
+<ParamField path="reset" type="number" default="1">
+  Reset delay in seconds
+</ParamField>
+
+<ParamField path="name" type="string" default="Unknown">
+  Combo display name
+</ParamField>
+
+<ParamField path="resetOnHit" type="boolean" default="true">
+  Reset combo when hit by enemy
+</ParamField>
+
+<ParamField path="resetOnLast" type="boolean" default="true">
+  Reset after final combo hit
+</ParamField>
+
+### combo-hit
+
+Increments combo counter and executes combo skill.
+
+- Increments `caster.<id>-currentcombo`
+- Executes skill from `skill.<currentcombo>` parameter
+- Displays combo count in action bar
+
+## Hit Evaluation
+
+Evaluates vanilla Minecraft hit types for enhanced melee mechanics.
+
+### hit_evaluate
+
+Determines hit type based on player state.
+
+**Hit Types:**
+
+<ParamField path="WEAK" type="string">
+  Triggered when attack cooldown ≤ 0.9
+</ParamField>
+
+<ParamField path="HIT" type="string">
+  Normal ground hit
+</ParamField>
+
+<ParamField path="SPRINT" type="string">
+  Hit while sprinting (not crouching)
+</ParamField>
+
+<ParamField path="UPPERCUT" type="string">
+  Hit while crouching on ground
+</ParamField>
+
+<ParamField path="AERIAL" type="string">
+  Hit while in air (altitude 0-3 blocks)
+</ParamField>
+
+<ParamField path="CRIT" type="string">
+  Critical hit (falling speed >0.1)
+</ParamField>
+
+**Returns:** Sets `skill.var.hit` variable to hit type string.
+
+## Moveset System
+
+Advanced combo system with hit type variations.
+
+### Moveset
+
+<ParamField path="maxmoveset" type="integer" default="3">
+  Maximum number of combo moves
+</ParamField>
+
+<ParamField path="reset" type="number" default="1">
+  Reset delay in seconds
+</ParamField>
+
+<ParamField path="moveset_id" type="string" default="default">
+  Unique identifier for this moveset
+</ParamField>
+
+<ParamField path="name" type="string">
+  Display name for moveset
+</ParamField>
+
+<ParamField path="1-9" type="metaskill">
+  Skills for each combo position (1, 2, 3...)
+</ParamField>
+
+<ParamField path="weak" type="metaskill">
+  Skill for weak hits
+</ParamField>
+
+<ParamField path="crit" type="metaskill">
+  Skill for critical hits
+</ParamField>
+
+<ParamField path="sprint" type="metaskill">
+  Skill for sprint hits
+</ParamField>
+
+<ParamField path="uppercut" type="metaskill">
+  Skill for uppercut hits
+</ParamField>
+
+<ParamField path="aerial" type="metaskill">
+  Skill for aerial hits
+</ParamField>
+
+### Example
+
+```yaml
+my_weapon_combo:
+  Skills:
+  - skill:Moveset{
+      maxmoveset=4;
+      reset=2;
+      moveset_id=sword_combo;
+      name="Sword Combo";
+      1=first_slash;
+      2=second_slash;
+      3=third_slash;
+      4=finisher;
+      crit=critical_strike;
+      sprint=dash_attack;
+      uppercut=launcher
+    } @self
+```
+
+## Target Selection
+
+Interactive target selection system with reticle.
+
+### select_target
+
+<ParamField path="mode" type="string" default="LOCATION">
+  Selection mode: `LOCATION`, `ENTITY`, `ANY`
+</ParamField>
+
+<ParamField path="range" type="number" default="32">
+  Maximum selection range
+</ParamField>
+
+<ParamField path="radius" type="number" default="8">
+  Selection area radius
+</ParamField>
+
+<ParamField path="duration" type="number" default="10">
+  Selection window duration in seconds
+</ParamField>
+
+<ParamField path="debug" type="boolean" default="false">
+  Show debug particles
+</ParamField>
+
+<ParamField path="id" type="metaskill" default="[]">
+  Skill to execute on selection
+</ParamField>
+
+<ParamField path="marker_init" type="metaskill" default="none">
+  Skill to initialize marker appearance
+</ParamField>
+
+### Location Targeting
+
+- Traces forward from eye location
+- Traces down to find ground
+- Summons target_marker-block entity
+- Swing to confirm selection
+
+### Entity Targeting
+
+- Raytrace to entities in view
+- Tracks nearest entity in cone
+- Updates marker to follow target
+- Swing to confirm selection
+
+## Spell Cycling
+
+Legacy system for cycling through spells (deprecated).
+
+### spell-cycle-cast
+
+Casts the active spell from cycle.
+
+<ParamField path="trigger.item.hand.nbt.activespell" type="integer">
+  Current active spell index (1-9)
+</ParamField>
+
+<ParamField path="trigger.item.hand.nbt.maxspells" type="integer">
+  Maximum number of spells in cycle
+</ParamField>
+
+### spell-cycle-right
+
+Cycles to next spell (increment index).
+
+### spell-cycle-left
+
+Cycles to previous spell (decrement index).

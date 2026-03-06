@@ -1,0 +1,305 @@
+---
+title: Stun Mechanic
+description: Custom stun system that prevents ability casting and interrupts channeling with visual feedback
+---
+
+## Overview
+
+The **Stun** mechanic creates a status effect that prevents entities from casting abilities. It includes visual effects, boss bar timers, slowness, and integration with status bars.
+
+## Features
+
+- **Prevents Ability Casting**: Blocks spell/ability use while active
+- **Boss Bar Timer**: Shows remaining stun duration
+- **Visual Effects**: Particles and sounds for stun application
+- **Status Integration**: Works with status bar systems
+- **Slowness Effect**: Applies movement speed reduction
+
+## Basic Usage
+
+```yaml
+stun_attack:
+  Skills:
+  - damage{a=15}
+  - skill:stun{duration=3} @target
+```
+
+## Parameters
+
+<ParamField path="duration" type="float" required>
+  Duration of the stun in seconds
+</ParamField>
+
+<ParamField path="level" type="integer" default="3">
+  Level of the slowness potion effect applied
+</ParamField>
+
+## Applying Stuns
+
+### Single Target
+
+```yaml
+stunning_strike:
+  Skills:
+  - damage{a=20}
+  - skill:stun{duration=2.5} @target
+  - e:p{p=crit;a=10;y=1}
+```
+
+### Area of Effect
+
+```yaml
+stun_slam:
+  Skills:
+  - damage{a=30}
+  - skill:stun{duration=4} @EntitiesInRadius{r=5}
+  - e:p{p=explosion_large;a=1}
+  - sound{s=entity.generic.explode;p=0.8;v=1}
+```
+
+### Conditional Stun
+
+```yaml
+chance_stun:
+  Skills:
+  - damage{a=15}
+  - skill:stun{duration=2} @target ~onBlock 0.25
+```
+
+## How It Works
+
+### Stun Application
+
+The stun uses an orbital aura with boss bar integration:
+
+```yaml
+stun-apply:
+  Skills:
+  - setvar{var=stun;val=<skill.duration|0>;type=FLOAT}
+  - orbital{name=stun;d="<skill.var.stun>*20";i=1;ma=true;
+      bartimer=true;
+      bartimertext="<yellow>Stunned! <yellow>%math_1:_<skill.var.aura-duration>/20%s";
+      bartimercolor=YELLOW;
+      r=0.8;p=20;oy=2.25;hp=false;hnp=false;
+      os=stun-start;
+      ot=stun-tick;
+      oe=stun-end
+    } ?varinrange{var=stun;val=>0}
+```
+
+Key features:
+- **Boss Bar Timer**: Shows remaining duration to players
+- **Merge Adjacent**: Refreshes if applied multiple times
+- **Height Offset**: Particles orbit above the entity's head
+
+### Preventing Ability Casting
+
+The `stun-oncast` skill triggers when the stunned entity attempts to cast:
+
+```yaml
+stun-oncast:
+  Cooldown: 0.3
+  Skills:
+  - sound{s=block.note_block.basedrum;p=0.6;v=1}
+  - sound{s=block.chain.step;p=1.15;v=1.0}
+  - am{m="<#C0C0C0>[<#B10000><bold>!<reset><#C0C0C0>]<reset> <white>You are still <yellow>Stunned <white>for <yellow><target.var.stun-duration>s";
+      delay=1} @targeted{conditions=[ - isPlayer ]}
+```
+
+<Note>
+  To integrate this with your ability system, you need to add a condition check for the "stun" orbital in your casting handler.
+</Note>
+
+### Visual Effects
+
+**On Start:**
+```yaml
+stun-start:
+  Skills:
+  - e:p{p=CRIT;a=12;y=1;hs=0.3;ys=0.3;speed=0.5}
+  - sound{s=block.anvil.land;p=1.60;v=0.4}
+  - sound{s=block.chain.step;p=1.15;v=1.0}
+  - am{m="<#C0C0C0>[<#B10000><bold>!<reset><#C0C0C0>]<reset> <white>You are now <yellow>Stunned <white>for <yellow><target.var.stun-duration>s"}
+    @targeted{conditions=[ - isPlayer ]}
+```
+
+**On Tick:**
+```yaml
+stun-tick:
+  Skills:
+  - setvariable{var=target.stun-duration;
+      val="%math_1:_<skill.var.aura-duration>/20%";
+      type=FLOAT;e=10} @targeted{conditions=[ - (isMythicMob || isPlayer) ]}
+  - e:p{p=REDSTONE;color=#FFFF00;amount=1} @origin
+  - e:p{p=CRIT;amount=1;y=1;hs=0.3;ys=0.6;speed=0.1} 0.4
+  - potion{type=SLOW;d=5;l=<skill.level|3>;p=false;i=false}
+```
+
+**On End:**
+```yaml
+stun-end:
+  Skills:
+  - varunset{var=target.stun-duration}
+    @targeted{conditions=[ - (isMythicMob || isPlayer) ]}
+  - potionclear{type=SLOW}
+```
+
+## Status Bar Integration
+
+The stun integrates with the `crypt-status_bar-signal` system:
+
+```yaml
+# On application
+- skill{s=crypt-status_bar-signal;status_name=stun;mode=ADD}
+
+# On removal
+- skill{s=crypt-status_bar-signal;status_name=stun;mode=REMOVE}
+```
+
+This allows status bar UIs to display stun indicators.
+
+## Examples
+
+### Boss Stun Slam
+
+```yaml
+boss_stun_slam:
+  Cooldown: 15
+  Conditions:
+  - targetwithin 10
+  Skills:
+  - message{m="&c<caster.name> &fwinds up a devastating slam!"}
+    @PlayersInRadius{r=20}
+  - delay 20
+  - jump{v=1}
+  - delay 15
+  - damage{a=40} @EntitiesInRadius{r=6}
+  - skill:stun{duration=5} @EntitiesInRadius{r=6}
+  - e:p{p=explosion_large;a=2;y=0.2;ys=2;hs=2}
+  - sound{s=entity.generic.explode;v=2;p=0.7}
+  - blockmask{m=BARRIER;d=5;r=6}
+```
+
+### Chain Lightning Stun
+
+```yaml
+chain_lightning:
+  Skills:
+  - damage{a=25;i=LIGHTNING} @target
+  - skill:stun{duration=1.5} @target
+  - skill:chain_lightning_bounce{bounces=3;damage=25} @target
+  - lightning{} @target
+
+chain_lightning_bounce:
+  Conditions:
+  - varinrange{var=bounces;val=>1}
+  Skills:
+  - setvar{var=bounces;val="<skill.var.bounces>-1";type=INTEGER} @self
+  - damage{a=<skill.damage>} @NearestEntity{r=8}
+  - skill:stun{duration=1} @NearestEntity{r=8}
+  - e:pl{origin=@target;p=end_rod;a=5} @NearestEntity{r=8}
+  - skill:chain_lightning_bounce{bounces=<skill.var.bounces>;damage=<skill.damage>}
+    @NearestEntity{r=8}
+```
+
+### Stun Break Mechanic
+
+```yaml
+stun_break:
+  Conditions:
+  - hasaura{name=stun}
+  Skills:
+  - removeaura{aura=stun}
+  - e:p{p=explosion_normal;a=10}
+  - sound{s=block.glass.break;p=1.2;v=1}
+  - am{m="<green>Stun broken!"} @self
+```
+
+## Advanced Usage
+
+### Variable Duration Based on Damage
+
+```yaml
+scaling_stun:
+  Skills:
+  - setvar{var=stun_duration;val="<skill.damage>/10";type=FLOAT} @self
+  - damage{a=<skill.damage>} @target
+  - skill:stun{duration=<caster.var.stun_duration>} @target
+```
+
+### Stun Immunity Period
+
+```yaml
+stun_with_immunity:
+  Skills:
+  - skill:stun{duration=3} @target ~hasaura{name=stun_immune} false
+  - aura{name=stun_immune;d=600} @target
+```
+
+This prevents the same target from being stunned again for 30 seconds.
+
+### Diminishing Returns
+
+```yaml
+diminishing_stun:
+  Skills:
+  - setvar{var=stun_count;val="<target.var.stun_count|0>+1";type=INTEGER} @target
+  - setvar{var=duration;val="3/<target.var.stun_count>";type=FLOAT} @self
+  - skill:stun{duration=<caster.var.duration>} @target
+  - aura{name=stun_reset;d=600;
+      onEnd=[ - varunset{var=target.stun_count} ]
+    } @target
+```
+
+Each subsequent stun within 30 seconds is shorter.
+
+## Testing
+
+The pack includes a test skill:
+
+```yaml
+stun-test_cast:
+  Skills:
+  - skill{s=stun;duration=10} @ENO{r=12}
+  - skill{s=stun;duration=3} @self
+```
+
+This stuns nearby enemies for 10 seconds and the caster for 3 seconds (for testing).
+
+## Aliases
+
+- `Stun` (capitalized)
+- `stun` (lowercase)
+
+Both call the same `stun-apply` logic.
+
+## Integration Notes
+
+<Warning>
+  This stun system requires integration with your ability casting handler. You must check for the "stun" orbital before allowing abilities to execute.
+</Warning>
+
+Example integration:
+
+```yaml
+ability_cast_handler:
+  Conditions:
+  - hasaura{name=stun} false
+  Skills:
+  - skill{s=<skill.ability_id>}
+  
+ability_cast_handler-stunned:
+  Conditions:
+  - hasaura{name=stun} true
+  Skills:
+  - skill:stun-oncast
+```
+
+## Performance
+
+The stun uses:
+- 1 orbital per stunned entity
+- Particle effects every tick (1 per second)
+- Boss bar updates (lightweight)
+
+This is efficient for normal gameplay but consider disabling particles on weaker servers if many entities are stunned simultaneously.

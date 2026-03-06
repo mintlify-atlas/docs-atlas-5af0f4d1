@@ -1,80 +1,446 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Create your first spell using IonTech's Modular Systems
 ---
 
-## Get started in three steps
+## Overview
 
-Get your documentation site running locally and make your first customization.
+In this guide, you'll create a simple fire projectile spell using the spell handler system. The spell will:
 
-### Step 1: Set up your local environment
+- Launch a flaming projectile that tracks targets
+- Ignite enemies on hit
+- Deal critical damage to already burning enemies
+- Have 3 charges that regenerate over time
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+This tutorial is based on the `flame_flicker` demo spell included in the pack.
 
-### Step 2: Deploy your changes
+## Understanding the Spell System
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+The modular spell system uses a **handler-based architecture** where you wrap your custom skill logic with the `Spell` handler. The handler automatically manages:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+- Cooldowns and charge systems
+- Warmup/channeling mechanics
+- Stat calculations (damage, crit chance, etc.)
+- Player feedback (sounds, messages, action bar displays)
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  Every spell needs at least two skills: a **cast skill** that calls the Spell handler, and an **execution skill** that contains your actual spell logic.
+</Note>
+
+## Creating Your First Spell
+
+<Steps>
+  <Step title="Create the Cast Skill">
+    The cast skill is what players will trigger (via item, command, or mechanic). It calls the `Spell` handler with your spell's configuration.
+
+    Create a new file in your skills folder called `my_fireball-spell.yml`:
+
+    ```yaml my_fireball-spell.yml
+    # Launch a fireball that ignites enemies
+    my_fireball-cast:
+      Skills:
+      - skill:Spell{id=my_fireball-exec;
+          name=Fireball;
+          type=ABILITY,FIRE;
+          spellcd=0;
+          charges=3;
+          chargecd=2;
+          charge_delay=1;
+          charge_regen=3}
+    ```
+
+    **Parameter breakdown:**
+    - `id` - The skill to execute when the spell is cast
+    - `name` - Display name shown to players
+    - `type` - Spell categories (used for modifiers and filtering)
+    - `spellcd` - Base cooldown in seconds (0 = no cooldown)
+    - `charges` - Number of charges (0 = no charge system)
+    - `chargecd` - Time to regenerate one charge
+    - `charge_delay` - Delay before first charge starts regenerating
+    - `charge_regen` - Number of charges restored per cycle
+  </Step>
+
+  <Step title="Create the Execution Skill">
+    The execution skill contains your spell's actual behavior. It's called after the Spell handler validates cooldowns and charges.
+
+    Add this to the same file:
+
+    ```yaml my_fireball-spell.yml
+    my_fireball-exec:
+      Skills:
+      - skill:my_fireball-fire{origin=@forward{uel=true;f=1;yo=-0.2}} 
+        @forward{yo=-0.2;f=12;uel=true}
+    ```
+
+    This launches the projectile slightly in front of and below the player's eye level, targeting 12 blocks ahead.
+  </Step>
+
+  <Step title="Create the Projectile Skill">
+    Now we'll create the actual projectile that fires:
+
+    ```yaml my_fireball-spell.yml
+    my_fireball-fire:
+      Skills:
+      - skill:setRandomID
+      - setvarloc{var=originloc;v=@origin}
+      - projectile{fo=true;ti=3;syo=0;sfo=0;hnp=true;se=false;ham=true;
+          velocity=64;i=1;g=0;mr=12;hr=0.4;vr=0.4;drawhitbox=false;
+          onTick=my_fireball-tick;
+          onHit=my_fireball-hit_entity;
+          onEnd=my_fireball-end}
+    ```
+
+    **Key parameters:**
+    - `velocity=64` - Fast projectile speed
+    - `mr=12` - Max range of 12 blocks
+    - `hr=0.4;vr=0.4` - Hit radius (horizontal and vertical)
+    - `onTick` - Called every tick while projectile travels
+    - `onHit` - Called when hitting an entity
+    - `onEnd` - Called when projectile reaches max range or hits block
+  </Step>
+
+  <Step title="Add Visual Effects">
+    Create the tick skill that displays particle effects as the projectile travels:
+
+    ```yaml my_fireball-spell.yml
+    my_fireball-tick:
+      Skills:
+      - setvarloc{var=targetloc;
+          v=@projectileforward{f=1;
+            x="<random.float.-0.25to0.25>*<skill.var.size|1>";
+            y="<random.float.-0.25to0.25>*<skill.var.size|1>";
+            z="<random.float.-0.25to0.25>*<skill.var.size|1>"}}
+      - e:pl{fo=true;origin=@VariableLocation{var=originloc};
+          p=small_flame;a=1;db=0.3} @VariableLocation{var=targetloc}
+      - e:pl{fo=true;
+          origin=@VariableLocation{var=originloc;
+            x="<random.float.-0.1to0.1>";
+            y="<random.float.-0.1to0.1>";
+            z="<random.float.-0.1to0.1>"};
+          p=dust_color_transition;size=0.8;a=1;
+          color1=#f3420c;color2=#ff0000;} 
+        @VariableLocation{var=targetloc;
+          x="<random.float.-0.1to0.1>";
+          y="<random.float.-0.1to0.1>";
+          z="<random.float.-0.1to0.1>"}
+      - setvarloc{var=originloc;v=@VariableLocation{var=targetloc}}
+      - setprojectiledirection @projectileforward{f=14;
+          x="<random.float.-0.25to0.25>";
+          y="<random.float.-0.25to0.25>";
+          z="<random.float.-0.25to0.25>"}
+    ```
+
+    This creates a flickering flame trail with slight randomization for a more natural look.
+  </Step>
+
+  <Step title="Add Damage on Hit">
+    Create the hit skill that damages enemies and applies effects:
+
+    ```yaml my_fireball-spell.yml
+    my_fireball-hit_entity:
+      TargetConditions:
+      - burning castinstead my_fireball-hit_entity-critical
+      Skills:
+      - skill:damage-ability{immune=10;
+          damageMod=[
+            - variableMath{var=damage;equation="x*0.6"}
+          ];
+          onHit=[
+            - ignite{d=60}
+          ]}
+    ```
+
+    This deals 60% of base damage and ignites the target for 3 seconds (60 ticks). If the target is already burning, it triggers the critical hit version instead.
+
+    Now add the critical hit version:
+
+    ```yaml my_fireball-spell.yml
+    my_fireball-hit_entity-critical:
+      Skills:
+      - setvar{var=critical;val=true;type=STRING}
+      - skill:damage-ability{
+          damageMod=[
+            - variableMath{var=damage;equation="x*1.5"}
+          ];
+          onHit=[
+            - ignite{d=200}
+          ]}
+    ```
+
+    Critical hits deal 150% damage and ignite for 10 seconds (200 ticks).
+  </Step>
+
+  <Step title="Add End Effects (Optional)">
+    Add visual and sound effects when the projectile expires:
+
+    ```yaml my_fireball-spell.yml
+    my_fireball-end:
+      Skills:
+      - sound{s=entity.generic.extinguish_fire;p=1.5;v=0.5}
+      - e:p{p=flame;a=8;speed=0.2;hS=0.2;vS=0.2}
+    ```
+  </Step>
+
+  <Step title="Test Your Spell">
+    Reload MythicMobs:
+
+    ```bash
+    /mm reload
+    ```
+
+    Test the spell:
+
+    ```bash
+    /mm test cast my_fireball-cast
+    ```
+
+    You should see:
+    - A fireball projectile launch forward
+    - Flame particle effects trailing behind
+    - Damage and ignite effects on hit
+    - Critical damage on already-burning targets
+    - Charge system with 3 charges that regenerate
+  </Step>
+</Steps>
+
+## Complete Code
+
+<CodeGroup>
+
+```yaml my_fireball-spell.yml
+# Launch a fireball that ignites enemies
+my_fireball-cast:
+  Skills:
+  - skill:Spell{id=my_fireball-exec;
+      name=Fireball;
+      type=ABILITY,FIRE;
+      spellcd=0;
+      charges=3;
+      chargecd=2;
+      charge_delay=1;
+      charge_regen=3}
+      
+my_fireball-exec:
+  Skills:
+  - skill:my_fireball-fire{origin=@forward{uel=true;f=1;yo=-0.2}} 
+    @forward{yo=-0.2;f=12;uel=true}
+
+my_fireball-fire:
+  Skills:
+  - skill:setRandomID
+  - setvarloc{var=originloc;v=@origin}
+  - projectile{fo=true;ti=3;syo=0;sfo=0;hnp=true;se=false;ham=true;
+      velocity=64;i=1;g=0;mr=12;hr=0.4;vr=0.4;drawhitbox=false;
+      onTick=my_fireball-tick;
+      onHit=my_fireball-hit_entity;
+      onEnd=my_fireball-end}
+
+my_fireball-tick:
+  Skills:
+  - setvarloc{var=targetloc;
+      v=@projectileforward{f=1;
+        x="<random.float.-0.25to0.25>*<skill.var.size|1>";
+        y="<random.float.-0.25to0.25>*<skill.var.size|1>";
+        z="<random.float.-0.25to0.25>*<skill.var.size|1>"}}
+  - e:pl{fo=true;origin=@VariableLocation{var=originloc};
+      p=small_flame;a=1;db=0.3} @VariableLocation{var=targetloc}
+  - e:pl{fo=true;
+      origin=@VariableLocation{var=originloc;
+        x="<random.float.-0.1to0.1>";
+        y="<random.float.-0.1to0.1>";
+        z="<random.float.-0.1to0.1>"};
+      p=dust_color_transition;size=0.8;a=1;
+      color1=#f3420c;color2=#ff0000;} 
+    @VariableLocation{var=targetloc;
+      x="<random.float.-0.1to0.1>";
+      y="<random.float.-0.1to0.1>";
+      z="<random.float.-0.1to0.1>"}
+  - setvarloc{var=originloc;v=@VariableLocation{var=targetloc}}
+  - setprojectiledirection @projectileforward{f=14;
+      x="<random.float.-0.25to0.25>";
+      y="<random.float.-0.25to0.25>";
+      z="<random.float.-0.25to0.25>"}
+
+my_fireball-hit_entity:
+  TargetConditions:
+  - burning castinstead my_fireball-hit_entity-critical
+  Skills:
+  - skill:damage-ability{immune=10;
+      damageMod=[
+        - variableMath{var=damage;equation="x*0.6"}
+      ];
+      onHit=[
+        - ignite{d=60}
+      ]}
+
+my_fireball-hit_entity-critical:
+  Skills:
+  - setvar{var=critical;val=true;type=STRING}
+  - skill:damage-ability{
+      damageMod=[
+        - variableMath{var=damage;equation="x*1.5"}
+      ];
+      onHit=[
+        - ignite{d=200}
+      ]}
+
+my_fireball-end:
+  Skills:
+  - sound{s=entity.generic.extinguish_fire;p=1.5;v=0.5}
+  - e:p{p=flame;a=8;speed=0.2;hS=0.2;vS=0.2}
+```
+
+```yaml Advanced: burning_blast-spell.yml
+# A more complex example with warmup and retargeting
+burning_blast-cast:
+  Skills:
+  - skill:Spell{id=burning_blast;name=Burning Blast;type=ABILITY;
+      spellcd=3;warmup=0.6;
+      onChannelStart=burning_blast-exec;
+      onChannelTick=[ 
+        - vskill{s=channel-tick_fx} 
+        - potion{t=SLOWNESS;l=2;duration=4;a=false;i=false;p=false}
+        ]} @self
+
+burning_blast-exec:
+  Skills:
+  - skill:burning_blast-fire{origin=@forward{uel=true;f=1;yo=-0.2}} 
+    @forward{yo=-0.2;f=12;uel=true}
+
+burning_blast-fire:
+  Skills:
+  - skill:setRandomID
+  - setvarloc{var=originloc;v=@origin}
+  - setvar{var=fired;val=0}
+  - projectile{fo=true;ti=3;syo=0;sfo=0;hnp=true;se=true;ham=true;
+      velocity=0.1;i=1;g=0;mr=32;hr=0.4;vr=0.4;drawhitbox=false;
+      bullet=DISPLAY;material=magma;rots=0,12,12;scale=0.5,0.5,0.5;
+      onStart=burning_blast-start;
+      onTick=burning_blast-tick;
+      onHit=burning_blast-hit_entity;
+      onEnd=burning_blast-end}
+
+burning_blast-start:
+  Skills:
+  - wait{c=[ - hasaura{aura=<skill.var.id>-channel} false ]}
+  - delay 1
+  - modifyprojectile{t=VELOCITY;a=SET;v=12}
+  - modifyprojectile{t=VELOCITY;a=ADD;v=1;repeat=6;repeati=4}
+  - setvar{var=fired;val=1}
+
+burning_blast-tick:
+  Skills:
+  - setvar{var=iterations;value="<skill.var.iterations|0>+1"}
+  - skill:burning_blast-retarget
+  - skill:burning_blast-tick_vfx
+
+burning_blast-retarget:
+  Conditions:
+  - varequals{var=fired;val=0}
+  Skills:
+  - raytraceto{fo=true;origin=@selfeyelocation;md=64;rw=0.1;ys=0;yt=0;
+      locationskill=[
+      - setProjectileDirection{magnitude=1}
+      ]} @forward{f=12;uel=true}
+  - setvar{var=pitch;val="<skill.var.pitch|0>+12"} 
+  - setvar{var=yaw;val="<skill.var.yaw|0>+12"}
+  - setvar{var=roll;val="<skill.var.roll|0>+12"}
+  - polygon{points=1;scale=1;db=0.5;mpd=false;
+      pitch=<skill.var.pitch>;yaw=<skill.var.yaw>;roll=<skill.var.roll>;
+        oe=[ 
+        - e:p{p=small_flame;fo=true;origin=@targetedlocation;
+            directional=true;a=1;speed=0.2} @projectileforward{f=0}
+        ]} 
+
+burning_blast-tick_vfx:
+  Conditions:
+  - varequals{var=fired;val=1}
+  Skills:
+  - setvarloc{var=originloc;v=@ProjectileForward{f=-4}}
+  - slash{fromorigin=true;origin=@origin;mpd=false;dtt=true;fo=0;yo=0;
+      angle=360;points=2;w=<skill.var.size|1>;h=<skill.var.size|1>;
+      duration=0;pitch=90;roll="<skill.var.iterations>*24";
+      oP=[
+      - e:p{fo=true;origin=@VariableLocation{var=originloc};
+          p=small_flame;a=1;directional=true;speed=0.3;hs=0.2;vs=0.2} 
+        @targetedlocation
+      ]}
+
+burning_blast-hit_entity:
+  Skills:
+  - skill:damage-ability{immune=20;
+      damageMod=[ - variableMath{var=damage;equation="x*2.5"} ];
+      onHit=[
+      - ignite{t=80}
+      ]} 
+
+burning_blast-end:
+  Skills:
+  - skill{s=burning_blast-hit_entity} @ENO{r=3}
+  - sound{s=entity.generic.explode;p=1.2} 
+  - e:p{p=explosion;a=1}
+  - e:p{p=flame;a=12;speed=0.3}
+  - e:pr{p=flame;radius=0.1;points=12;a=1;speed=0.4;hS=0.20;vS=0.8;
+      directional=true} 
+  - e:p{p=reddust;color=#ff0000;amount=4;speed=0;hS=0.40;vS=0.4;size=2}
+  - e:p{p=reddust;color=#ff6600;amount=4;speed=0;hS=0.40;vS=0.4;size=2}
+  - e:p{p=reddust;color=#ff0000;amount=1;speed=0;hS=0.40;vS=0.4;size=5}
+  - e:p{p=reddust;color=#ffaa00;amount=1;speed=0;hS=0.40;vS=0.4;size=5}
+```
+
+</CodeGroup>
+
+## Understanding Spell Parameters
+
+The `Spell` handler accepts many configuration parameters. Here are the most commonly used:
+
+### Basic Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `id` | string | required | The skill to execute when cast |
+| `name` | string | required | Display name for the spell |
+| `type` | string | "ABILITY" | Spell category/tags (comma-separated) |
+| `spellcd` | float | 1 | Base cooldown in seconds |
+| `damage` | float | caster.damage | Base damage value |
+
+### Charge System
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `charges` | int | 0 | Max charges (0 disables charge system) |
+| `chargecd` | float | 3 | Seconds to regenerate one charge |
+| `charge_regen` | int | 1 | Charges restored per cycle |
+| `charge_delay` | float | 0 | Delay before first charge regens |
+
+### Warmup/Channeling
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `warmup` | float | 0 | Channel time in seconds before cast |
+| `onChannelStart` | skill | channel-start_fx | Skill called when channeling starts |
+| `onChannelTick` | skill | channel-tick_fx | Skill called each tick while channeling |
+| `onInterrupt` | skill | [] | Skill called when channel is interrupted |
+
+### Advanced Stats
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `critical_chance` | float | 0.01 | Chance to crit (0-1) |
+| `critical_damage` | float | 0 | Bonus crit damage multiplier |
+| `velocity` | float | 48 | Projectile velocity |
+| `range` | float | 32 | Max spell range |
+
+## Next Steps
+
+Now that you've created your first spell, you can:
+
+- Explore the demo spells in `skills/Demo Skills/Demo Spells/` for more examples
+- Learn about the damage system and modifiers
+- Create custom visual effects with particles
+- Build spell combos and interactions
+- Implement mana costs and resource management
+
+<Note>
+  Check out the `burning_blast-spell.yml` demo for an advanced example featuring warmup channeling, dynamic retargeting, and explosive area damage.
 </Note>

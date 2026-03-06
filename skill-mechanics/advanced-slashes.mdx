@@ -1,0 +1,292 @@
+---
+title: Advanced Slash Handler
+description: Create sophisticated melee attacks with accurate hitboxes, VFX tapering, and custom slash patterns
+---
+
+## Overview
+
+The **Advanced Slash** mechanic creates visually impressive slash attacks with accurate hitbox detection. It features VFX configuration with tapering effects, customizable arc patterns, and precise collision detection using totems.
+
+## Key Features
+
+- **VFX Tapering**: Slash width gradually increases from base to tip
+- **Separate VFX and Hitbox Points**: Independent configuration for visuals and collision
+- **Instant or Animated**: Choose between immediate or animated slash execution
+- **Two-Sided Option**: Randomize roll for unpredictable slash direction
+- **Accurate Hitboxes**: Uses totem-based collision detection for precision
+
+## Basic Usage
+
+```yaml
+my_slash_skill:
+  Skills:
+  - skill:Advanced_Slash{
+      origin=@SelfEyeLocation{yo=-0.25};
+      arc=120;
+      duration=8;
+      radius=5;
+      width=1;
+      vfx_points=24;
+      hitbox_points=12;
+      onHit=[
+        - damage{a=20}
+        - vskill{s=my_hit_effect}
+      ]
+    } @forward{f=12;uel=true;yo=-0.25}
+```
+
+## Parameters
+
+<ParamField path="arc" type="integer" default="180">
+  The arc angle of the slash in degrees (0-360)
+</ParamField>
+
+<ParamField path="duration" type="integer" default="0">
+  Duration in ticks for the slash animation (0 for instant)
+</ParamField>
+
+<ParamField path="radius" type="float" default="3">
+  The reach/length of the slash
+</ParamField>
+
+<ParamField path="width" type="float" default="1">
+  The maximum width at the tip of the slash
+</ParamField>
+
+<ParamField path="basewidth" type="float" default="0.1">
+  The width at the base of the slash (creates tapering effect)
+</ParamField>
+
+<ParamField path="vfx_points" type="integer" default="32">
+  Number of visual effect points along the slash arc
+</ParamField>
+
+<ParamField path="hitbox_points" type="integer" default="32">
+  Number of hitbox detection points along the slash arc (set to 0 to disable hitboxes)
+</ParamField>
+
+<ParamField path="hitboxsize" type="float" default="0.2">
+  The radius of each hitbox detection sphere
+</ParamField>
+
+<ParamField path="instant" type="boolean" default="false">
+  If true, all hitboxes are created instantly; if false, they animate with the slash
+</ParamField>
+
+<ParamField path="twoside" type="boolean" default="true">
+  If true, randomizes the roll rotation for unpredictable slash direction
+</ParamField>
+
+<ParamField path="show_vfx" type="boolean" default="true">
+  Whether to display visual effects
+</ParamField>
+
+<ParamField path="yaw" type="float" default="0">
+  Yaw rotation offset in degrees
+</ParamField>
+
+<ParamField path="pitch" type="float" default="0">
+  Pitch rotation offset in degrees
+</ParamField>
+
+<ParamField path="roll" type="float" default="0">
+  Roll rotation offset in degrees
+</ParamField>
+
+<ParamField path="onHit" type="skill[]" required>
+  Skills to execute when the slash hits an entity
+</ParamField>
+
+<ParamField path="vfx" type="skill" default="advanced_slash-default_vfx">
+  Custom VFX skill to override default slash visuals
+</ParamField>
+
+## How It Works
+
+### Tapering System
+
+The slash width gradually increases from `basewidth` at the origin to `width` at the tip:
+
+```yaml
+advanced_slash-scale_taper:
+  Skills:
+  - setvar{var=currentwidth;val="<skill.var.vfx_counter>*((<skill.var.width>-<skill.var.basewidth>)/<skill.var.vfx_points>)";type=FLOAT}
+```
+
+This creates a realistic blade-like appearance where the slash is thin at the base and widens toward the tip.
+
+### Hitbox Detection
+
+Hitboxes are created using totems for accurate collision detection:
+
+```yaml
+advanced_slash-hitbox_point:
+  Skills: 
+  - totem{fo=true;origin=@VariableLocation{var=originloc};
+      drawHitbox=false;ham=false;md=1;charges=1;
+      hR=<skill.var.hitboxsize>;vR=<skill.var.hitboxsize>;
+      hnp=true;se=false;sb=false;
+      onHit=advanced_slash-hit_entity}
+```
+
+Each hitbox:
+- Has configurable radius (`hitboxsize`)
+- Lasts for 1 tick (`md=1`)
+- Hits only once per entity (`charges=1`)
+- Requires line of sight
+
+### Hit Detection Logic
+
+Prevents multiple hits on the same entity using auras:
+
+```yaml
+advanced_slash-hit_entity:
+  TargetConditions:
+  - isliving true
+  - targetInLineOfSight true
+  Skills: 
+  - aura{name=slash_impact;ma=true;d=3} @targeted
+  - aura{name=slash_display_hit;ma=true;d=1;delay=2} @targeted
+  - vskill{s=<skill.onHit>}
+```
+
+The `slash_impact` aura prevents the same entity from being hit multiple times within 3 ticks.
+
+## Examples
+
+### Wide Spinning Slash
+
+```yaml
+spinning_slash:
+  Skills:
+  - skill:Spell{id=spinning_slash-exec;name=Spinning Slash;
+      spellcd=5;damage=30} @self
+
+spinning_slash-exec:
+  Skills:
+  - skill:Advanced_Slash{
+      origin=@SelfEyeLocation{yo=-0.25};
+      arc=360;
+      duration=8;
+      twoside=false;
+      roll=0;
+      vfx_points=24;
+      hitbox_points=128;
+      radius=12;
+      width=1;
+      onHit=[
+        - damage{a=30}
+        - throw{v=1;vy=0.3}
+      ]
+    } @forward{f=12;uel=true;yo=-0.25}
+```
+
+### Quick Upward Slash
+
+```yaml
+upward_slash:
+  Skills:
+  - skill:Advanced_Slash{
+      origin=@SelfEyeLocation;
+      arc=90;
+      duration=6;
+      instant=false;
+      pitch=-45;
+      radius=4;
+      width=1.5;
+      basewidth=0.2;
+      vfx_points=16;
+      hitbox_points=8;
+      onHit=[
+        - damage{a=15}
+        - throw{v=0;vy=1.2}
+      ]
+    } @forward{f=6;uel=true}
+```
+
+### Instant Horizontal Slash
+
+```yaml
+quick_slash:
+  Skills:
+  - skill:Advanced_Slash{
+      origin=@SelfEyeLocation{yo=-0.25};
+      arc=120;
+      duration=8;
+      instant=true;
+      radius=5;
+      width=1;
+      hitbox_points=12;
+      onHit=[
+        - damage{a=20}
+        - ignite{t=40}
+      ]
+    } @forward{f=8;uel=true;yo=-0.25}
+```
+
+## Custom VFX
+
+Override the default VFX by specifying a custom `vfx` skill:
+
+```yaml
+flaming_slash:
+  Skills:
+  - skill:Advanced_Slash{
+      origin=@SelfEyeLocation;
+      arc=135;
+      radius=6;
+      vfx=flame_slash_vfx;
+      onHit=[
+        - damage{a=25}
+        - ignite{t=60}
+      ]
+    } @forward{f=10;uel=true}
+
+flame_slash_vfx:
+  Skills:
+  - e:p{fo=true;origin=@variableLocation{var=taper_origin};p=flame;a=3;speed=0.1}
+  - e:p{fo=true;origin=@variableLocation{var=taper_origin};p=lava;a=1}
+```
+
+<Note>
+  The `taper_origin` variable location is automatically calculated for each VFX point and represents the tapered position along the slash.
+</Note>
+
+## Aliases
+
+The following aliases are available:
+- `Advanced_Slash`
+- `advanced_slash`
+- `Slash`
+- `slash`
+
+All aliases call `advanced_slash-exec`.
+
+## Technical Details
+
+### Line-Based Hitboxes
+
+Hitboxes are distributed along lines from the origin to each point on the slash arc:
+
+```yaml
+advanced_slash-hitbox:
+  Skills: 
+  - skill{fo=true;origin=@VariableLocation{var=originloc};
+      s=[
+        - skill{s=advanced_slash-hitbox_point} @line{fo=true;radius=0.9}
+      ]
+    } @targetedLocation
+```
+
+This creates a filled slash area rather than just points along the arc.
+
+### Performance Considerations
+
+- Higher `hitbox_points` = more accurate detection but higher performance cost
+- `vfx_points` can be higher than `hitbox_points` for visual quality without performance impact
+- Use `instant=true` for immediate detection if animation isn't needed
+- Set `hitbox_points=0` to disable hitboxes entirely (VFX only)
+
+<Tip>
+  For optimal performance, use 12-24 hitbox points for most slash attacks. Only increase for very large or critical attacks.
+</Tip>

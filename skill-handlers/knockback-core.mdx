@@ -1,0 +1,274 @@
+---
+title: 'Knockback Core'
+description: 'Deterministic knockback system with directional and radial knockback support'
+---
+
+The knockback core provides **deterministic, physics-based knockback** that can be either directional (toward a specific location) or radial (away from an origin point).
+
+## Overview
+
+Unlike vanilla Minecraft knockback which has random elements, this system provides:
+
+- **Deterministic behavior** - Same inputs = same outputs
+- **Directional knockback** - Push toward a specific location
+- **Radial knockback** - Push away from an origin point
+- **Vertical control** - Separate horizontal and vertical knockback
+- **Vector-based calculation** - Precise physics using vector math
+
+## Basic Usage
+
+Directional knockback:
+
+```yaml
+- setvarloc{var=knockback_direction;val=@forward{f=12;lockpitch=true}}
+- skill:knockback{kb=3;origin=@selflocation} @target
+```
+
+Radial knockback:
+
+```yaml
+- skill:knockback{kb=12;origin=@selflocation} @EntitiesNearOrigin{r=5}
+```
+
+## Core Parameters
+
+<ParamField path="kb" type="float" default="0">
+  Horizontal knockback velocity/strength.
+  
+  Aliases: `velocity`, `v`
+  
+  ```yaml
+  kb=3  # Moderate knockback
+  ```
+</ParamField>
+
+<ParamField path="kby" type="float" default="0">
+  Vertical knockback velocity/strength. Positive launches up, negative pushes down.
+  
+  Aliases: `velocityy`, `vy`
+  
+  ```yaml
+  kby=1.5  # Launch upward
+  ```
+</ParamField>
+
+<ParamField path="origin" type="location" required>
+  Origin point for calculating knockback direction. For radial knockback, targets are pushed away from this location.
+  
+  ```yaml
+  origin=@selflocation
+  ```
+</ParamField>
+
+<ParamField path="vertical" type="boolean" default="true">
+  Whether to include vertical component in knockback direction.
+  
+  - `true` - 3D knockback (can launch diagonally)
+  - `false` - 2D knockback (only horizontal)
+  
+  ```yaml
+  vertical=false  # Horizontal knockback only
+  ```
+</ParamField>
+
+## Knockback Direction Variable
+
+Set `knockback_direction` to control directional knockback:
+
+```yaml
+- setvarloc{var=knockback_direction;val=@forward{f=12}}
+- skill:knockback{kb=5;origin=@selflocation} @target
+```
+
+If not set, knockback will be **radial** (away from origin):
+
+```yaml knockback_core.yml:58
+- setvarloc{var=knockback_direction;val=@LOT} ?!varisset{var=knockback_direction}
+```
+
+## How It Works
+
+The knockback system uses vector mathematics:
+
+```yaml knockback_core.yml:56
+knockback-eval:
+  Skills:
+  # Get origin and direction locations
+  - setvarloc{var=knockback_origin;val=@targetedlocation} @origin
+  - setvarloc{var=knockback_direction;val=@LOT} ?!varisset{var=knockback_direction}
+  - setvarloc{var=target_location;val=@LOT}
+  
+  # Convert to vectors
+  - setvar{var=knockback_origin_vec;val=<skill.var.knockback_origin.coords>;t=VECTOR}
+  - setvar{var=knockback_direction_vec;val=<skill.var.knockback_direction.coords>;t=VECTOR}
+  - setvar{var=knockback_offset_vec;val=<skill.var.knockback_direction_vec.sub.<skill.var.knockback_origin_vec>>;t=VECTOR}
+  
+  # Calculate destination
+  - setvar{var=target_location_vec;val=<skill.var.target_location.coords>;t=VECTOR}
+  - setvar{var=destination_location_vec;val=<skill.var.target_location_vec.add.<skill.var.kby_add>.add.<skill.var.knockback_offset_vec.normalized.mul.<skill.var.kb_add>>>;t=VECTOR}
+  
+  # Apply knockback
+  - propel{v=<skill.var.kb_calc>} @variableLocation{var=destination_location}
+```
+
+### Vector Addition
+
+The destination is calculated as:
+
+```
+destination = target_position + vertical_offset + (direction_vector * knockback_multiplier)
+```
+
+Where:
+- `direction_vector` = normalized direction from origin to knockback_direction
+- `knockback_multiplier` = kb value (with optional vertical component)
+
+## Initialization
+
+```yaml knockback_core.yml:33
+knockback-init:
+  Skills:
+  - setvar{var=kb;val=<skill.velocity|<skill.v|<skill.kb|0>>>;t=FLOAT}
+  - setvar{var=kby;val=<skill.velocityy|<skill.vy|<skill.kby|0>>>;t=FLOAT}
+  - setvar{var=vertical;val=<skill.vertical|true>;t=BOOLEAN}
+  
+  - setvar{var=kb_duration;val="(max(<skill.var.kb>,5)-5)*2";t=INTEGER}
+  - setvar{var=kb_calc;val="max(<skill.var.kb>,<skill.var.kby>)/2";t=FLOAT}
+  
+  - setvar{var=kb_add;val=<skill.var.kb>,0,<skill.var.kb>;t=VECTOR} ?varequals{var=vertical;val=false}
+  - setvar{var=kb_add;val=<skill.var.kb>,<skill.var.kb>,<skill.var.kb>;t=VECTOR} ?varequals{var=vertical;val=true}
+  - setvar{var=kby_add;val=0,<skill.var.kby>,0;t=VECTOR}
+```
+
+## Example: Directional Knockback
+
+Push enemies forward in the direction you're facing:
+
+```yaml knockback_core.yml:10
+knockback-test:
+  Skills:
+  - setvarloc{var=knockback_direction;val=@forward{f=12;yo=12}}
+  - skill:knockback{kb=3;kby=1;origin=@selflocation;vertical=false} @ENO{r=12}
+```
+
+## Example: Cone Knockback
+
+Knock enemies in a cone away from you:
+
+```yaml knockback_core.yml:15
+knockback-test2:
+  Skills:
+  - setvarloc{var=knockback_direction;val=@forward{f=12}}
+  - skill:knockback{kb=12;origin=@selflocation} @livingEntitiesInCone{p=true;a=180;r=12}
+```
+
+## Example: Vertical Launch
+
+Launch enemies upward:
+
+```yaml knockback_core.yml:20
+knockback-test3:
+  Skills:
+  - setvarloc{var=knockback_direction;val=@selflocation}
+  - skill:knockback{kb=12;origin=@forward{f=12;lockpitch=true};vertical=true} @livingEntitiesInCone{p=true;a=90;r=12}
+```
+
+## Example: Explosion Knockback
+
+Radial knockback from an explosion center:
+
+```yaml
+explosion:
+  Skills:
+  - setvarloc{var=explosion_center;val=@selflocation{yo=1}}
+  - skill:knockback{kb=5;kby=2;origin=@variableLocation{var=explosion_center}} @EntitiesNearOrigin{r=6}
+  - damage{a=50} @EntitiesNearOrigin{r=6}
+```
+
+## Example: Pull Toward Location
+
+Negative knockback to pull enemies:
+
+```yaml
+gravity_well:
+  Skills:
+  - setvarloc{var=well_location;val=@forward{f=10}}
+  - setvarloc{var=knockback_direction;val=@variableLocation{var=well_location}}
+  
+  # Pull toward well (negative kb means pull toward direction instead of push)
+  - skill:knockback{kb=-3;origin=@targetLocation} @EntitiesNearOrigin{r=8}
+```
+
+## Example: Downward Slam
+
+Knockback with negative vertical velocity:
+
+```yaml
+ground_slam:
+  Skills:
+  - setvarloc{var=knockback_direction;val=@selflocation}
+  - skill:knockback{kb=2;kby=-1.5;origin=@selflocation{yo=2}} @EntitiesNearOrigin{r=5}
+  # kby=-1.5 slams enemies downward
+```
+
+## Integration with Damage
+
+Use knockback in damage callbacks:
+
+```yaml
+my_spell:
+  Skills:
+  - setvarloc{var=knockback_direction;val=@forward{f=12}}
+  - skill:damage{onHit=[
+      - vskill{s=knockback;kb=3;kby=1;origin=@casterLocation}
+    ]} @target
+```
+
+## Melee Integration
+
+See [Melee Core](/skill-handlers/melee-core) for examples of knockback in melee combat.
+
+## Advanced: Custom Knockback Behavior
+
+Access the destination vector for custom effects:
+
+```yaml
+my_custom_knockback:
+  Skills:
+  - skill{s=knockback-init}
+  - foreach{skill=knockback-eval;tt=ENTITY;branch=true} @targeted
+  
+  # After knockback-eval, you can access:
+  # <skill.var.destination_location_vec> - Final destination
+  # <skill.var.knockback_offset_vec> - Direction vector
+  # <skill.var.kb_calc> - Calculated velocity
+```
+
+## Multi-Target Knockback
+
+The foreach loop handles multiple targets:
+
+```yaml knockback_core.yml:29
+knockback:
+  Skills:
+  - skill:knockback-init
+  - foreach{skill=knockback-eval;tt=ENTITY;branch=true} @targeted
+```
+
+Each target is processed individually with their own position calculations.
+
+## Propel Mechanic
+
+The final knockback uses MythicMobs' propel mechanic:
+
+```yaml knockback_core.yml:76
+- propel{v=<skill.var.kb_calc>} @variableLocation{var=destination_location}
+```
+
+This creates smooth, physics-based movement toward the calculated destination.
+
+## Related Systems
+
+- [Damage Core](/skill-handlers/damage-core) - Combine knockback with damage
+- [Melee Core](/skill-handlers/melee-core) - Vanilla melee knockback implementation
+- [Spell Casting Handler](/skill-handlers/spell-casting) - Add knockback to spells

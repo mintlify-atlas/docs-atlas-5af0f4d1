@@ -1,0 +1,454 @@
+---
+title: Mobs API
+description: API reference for mobs in IonTech's Modular Systems
+---
+
+Mob configuration templates and utility mobs for game mechanics.
+
+## Base Mob Templates
+
+### hostile_mob
+
+Base template for hostile mobs.
+
+```yaml
+hostile_mob:
+  Type: SKELETON
+  Faction: Hostile
+  Display: 'Base Hostile Mob'
+  Health: 20
+  Damage: 4
+  Options:
+    Despawn: true
+    Silent: true
+    DigOutOfGround: true
+    AlwaysShowName: false
+    PreventRandomEquipment: false
+    PreventItemPickup: true
+    PreventOtherDrops: true
+    PreventJockeyMounts: true
+    PreventTransformation: true
+    PreventSunburn: true
+    FollowRange: 32
+    MovementSpeed: 0.2
+    AttackSpeed: 4
+```
+
+**Attributes:**
+
+<ParamField path="Type" type="string" required>
+  Minecraft entity type
+</ParamField>
+
+<ParamField path="Faction" type="string">
+  Mob faction: Hostile, Friendly, Passive
+</ParamField>
+
+<ParamField path="Display" type="string">
+  Display name (supports color codes)
+</ParamField>
+
+<ParamField path="Health" type="number" default="20">
+  Maximum health
+</ParamField>
+
+<ParamField path="Damage" type="number" default="1">
+  Base damage
+</ParamField>
+
+### Options
+
+<ParamField path="Options.Despawn" type="boolean" default="true">
+  Allow natural despawning
+</ParamField>
+
+<ParamField path="Options.Silent" type="boolean" default="false">
+  Suppress sounds
+</ParamField>
+
+<ParamField path="Options.AlwaysShowName" type="boolean" default="false">
+  Always display nameplate
+</ParamField>
+
+<ParamField path="Options.FollowRange" type="number" default="32">
+  Entity detection range
+</ParamField>
+
+<ParamField path="Options.MovementSpeed" type="number" default="0.2">
+  Movement speed multiplier
+</ParamField>
+
+<ParamField path="Options.AttackSpeed" type="number" default="4">
+  Attacks per second
+</ParamField>
+
+<ParamField path="Options.PreventRandomEquipment" type="boolean" default="false">
+  Prevent random armor/weapons
+</ParamField>
+
+<ParamField path="Options.PreventItemPickup" type="boolean" default="false">
+  Prevent picking up items
+</ParamField>
+
+<ParamField path="Options.PreventOtherDrops" type="boolean" default="false">
+  Prevent vanilla drops
+</ParamField>
+
+<ParamField path="Options.PreventJockeyMounts" type="boolean" default="false">
+  Prevent jockey mounting
+</ParamField>
+
+<ParamField path="Options.PreventTransformation" type="boolean" default="false">
+  Prevent zombie/piglin transformation
+</ParamField>
+
+<ParamField path="Options.PreventSunburn" type="boolean" default="false">
+  Prevent sun damage
+</ParamField>
+
+<ParamField path="Options.DigOutOfGround" type="boolean" default="false">
+  Can dig out when spawned underground
+</ParamField>
+
+### hostile_mob-advanced
+
+Advanced hostile mob with AI templates.
+
+```yaml
+hostile_mob-advanced:
+  Type: Husk
+  Display: 'Advanced Hostile Mob'
+  Template: hostile_mob,detection_ai,mob_levelling
+  Health: 20
+  Options:
+    FollowRange: 64
+    MovementSpeed: 0.3
+    AttackSpeed: 4
+  Variables:
+    debug: false
+    equipment_power: 12
+    equipment: equipment-vanilla_melee
+```
+
+**Inherits:**
+- `hostile_mob`: Base stats
+- `detection_ai`: Detection and aggro AI
+- `mob_levelling`: Level scaling system
+
+## Mob Templates
+
+### detection_ai
+
+Advanced detection and aggro system (from detection_ai-template.yml).
+
+**Features:**
+- Line-of-sight detection
+- Aggro range management
+- Alert state system
+- Patrol behavior
+
+### mob_levelling
+
+Level-based stat scaling (from mob_levelling-template.yml).
+
+**Features:**
+- Health scaling by level
+- Damage scaling by level
+- Equipment quality scaling
+- Experience rewards
+
+### mob_spawner
+
+Spawner controller template (from mob_spawner-template.yml).
+
+**Features:**
+- Wave spawning
+- Spawn limits
+- Weighted spawn tables
+- Cooldown management
+
+## Game Mechanic Mobs
+
+### channel_indicator
+
+Visual indicator for spell channeling.
+
+```yaml
+channel_indicator:
+  Type: text_display
+  Display: ''
+  Faction: SERVER
+  DisplayOptions:
+    Text: ""
+    LineWidth: 100
+    Billboard: CENTER
+    Scale: 1,1,1
+    Translation: 0,0.5,0
+    BlockLight: 15
+    SkyLight: 15
+  Options:
+    Marker: true
+    Invisible: true
+    HasGravity: false
+  Variables:
+    spell_name: ''
+    channel_duration: ''
+  Skills:
+  - remove @self ~onTimer:10 ?!hasParent
+  - remove @self ~onDismounted
+```
+
+**Usage:** Automatically summoned by spell_handler during channeling.
+
+**Display Options:**
+
+<ParamField path="DisplayOptions.Text" type="string">
+  Text content (updated by spell system)
+</ParamField>
+
+<ParamField path="DisplayOptions.Billboard" type="string" default="CENTER">
+  Billboard mode: CENTER, FIXED, VERTICAL, HORIZONTAL
+</ParamField>
+
+<ParamField path="DisplayOptions.Scale" type="vector" default="1,1,1">
+  X, Y, Z scale
+</ParamField>
+
+<ParamField path="DisplayOptions.Translation" type="vector" default="0,0.5,0">
+  X, Y, Z offset
+</ParamField>
+
+<ParamField path="DisplayOptions.BlockLight" type="integer" default="15">
+  Block light level (0-15)
+</ParamField>
+
+<ParamField path="DisplayOptions.SkyLight" type="integer" default="15">
+  Sky light level (0-15)
+</ParamField>
+
+### damage_indicator
+
+Floating damage number display (from damage_indicator-mob.yml).
+
+**Features:**
+- Text display entity
+- Animated movement toward caster
+- Color-coded by damage type
+- Auto-removal after duration
+
+### generic_marker-mobs
+
+Generic marker entities for various purposes (from generic_marker-mobs.yml).
+
+**Types:**
+- Location markers
+- Waypoint markers
+- Area markers
+
+### targeting_marker-mobs
+
+Target reticle and selection markers (from targeting_marker-mobs.yml).
+
+**target_marker-block**
+
+Reticle for target selection system.
+
+```yaml
+target_marker-block:
+  Type: block_display
+  Faction: SERVER
+  Options:
+    Marker: true
+    Invisible: false
+    HasGravity: false
+  Skills:
+  - remove @self ~onTimer:100 ?!hasParent
+```
+
+**Features:**
+- Block display entity for reticle
+- Follows selected target
+- Auto-removes when orphaned
+
+### summon-mobs
+
+Player summon templates (from summon-mobs.yml).
+
+**Features:**
+- Owner tracking
+- Parent relationship
+- Combat state management
+- Custom nameplate
+
+### timer-display-mobs
+
+Timer and countdown displays (from timer-display-mobs.yml).
+
+**Features:**
+- Text display entity
+- Countdown/countup modes
+- Custom formatting
+
+## Mob Configuration Format
+
+### Core Fields
+
+<ParamField path="Type" type="string" required>
+  Minecraft entity type (e.g., ZOMBIE, SKELETON, text_display)
+</ParamField>
+
+<ParamField path="Template" type="string">
+  Inherit from template(s), comma-separated
+</ParamField>
+
+<ParamField path="Faction" type="string" default="Hostile">
+  Faction: Hostile, Friendly, Passive, SERVER
+</ParamField>
+
+<ParamField path="Display" type="string">
+  Display name (supports color codes and placeholders)
+</ParamField>
+
+<ParamField path="Health" type="number" default="20">
+  Maximum health
+</ParamField>
+
+<ParamField path="Damage" type="number" default="1">
+  Base attack damage
+</ParamField>
+
+<ParamField path="Armor" type="number" default="0">
+  Armor points
+</ParamField>
+
+<ParamField path="KnockbackResistance" type="number" default="0">
+  Knockback resistance (0.0-1.0)
+</ParamField>
+
+### Variables
+
+```yaml
+Variables:
+  debug: false
+  equipment_power: 12
+  equipment: equipment-vanilla_melee
+  model_id: "custom_model"
+```
+
+Custom variables accessible via `<caster.var.variable_name>`.
+
+<ParamField path="Variables.save" type="boolean" default="false">
+  Persist variables through server restarts
+</ParamField>
+
+### Equipment
+
+```yaml
+Equipment:
+- DIAMOND_SWORD HAND
+- DIAMOND_HELMET HEAD
+- DIAMOND_CHESTPLATE CHEST
+- DIAMOND_LEGGINGS LEGS
+- DIAMOND_BOOTS FEET
+- SHIELD OFFHAND
+```
+
+**Slots:**
+- `HAND`: Main hand
+- `OFFHAND`: Off hand
+- `HEAD`: Helmet
+- `CHEST`: Chestplate
+- `LEGS`: Leggings
+- `FEET`: Boots
+
+### Skills
+
+```yaml
+Skills:
+- skill{s=mob-init} ~onSpawn
+- skill{s=mob-tick} ~onTimer:20
+- skill{s=mob-death} ~onDeath
+- skill{s=mob-damaged} ~onDamaged
+- skill{s=mob-attack} ~onAttack
+```
+
+**Common Triggers:**
+- `~onSpawn`: When mob spawns
+- `~onLoad`: When chunk loads
+- `~onDeath`: When mob dies
+- `~onTimer:X`: Every X ticks
+- `~onDamaged`: When taking damage
+- `~onAttack`: When attacking
+- `~onTarget`: When acquiring target
+- `~onCombat`: When entering combat
+- `~onDropCombat`: When leaving combat
+
+## Display Entities
+
+For text_display, block_display, and item_display entities.
+
+### DisplayOptions
+
+```yaml
+DisplayOptions:
+  Text: "Display Text"
+  LineWidth: 200
+  Billboard: CENTER
+  BackgroundColor: 0,0,0,64
+  TextOpacity: 255
+  Scale: 1,1,1
+  Translation: 0,0,0
+  BlockLight: 15
+  SkyLight: 15
+```
+
+<ParamField path="DisplayOptions.Text" type="string">
+  Text content (text_display only)
+</ParamField>
+
+<ParamField path="DisplayOptions.LineWidth" type="integer" default="200">
+  Maximum line width before wrapping
+</ParamField>
+
+<ParamField path="DisplayOptions.Billboard" type="string" default="FIXED">
+  Billboard mode: CENTER, FIXED, VERTICAL, HORIZONTAL
+</ParamField>
+
+<ParamField path="DisplayOptions.BackgroundColor" type="string" default="0,0,0,64">
+  RGBA background color
+</ParamField>
+
+<ParamField path="DisplayOptions.TextOpacity" type="integer" default="255">
+  Text opacity (0-255)
+</ParamField>
+
+## Summon Handler Integration
+
+### summon-init
+
+Automatically called on summon spawn.
+
+**Sets:**
+- `caster.owneruuid`: Owner's UUID
+- `caster.ownername`: Owner's name
+- `caster.combatstate`: Combat state (1=Idle, 2=Low Alert, 3=High Alert, 4=Combat)
+- Parent and owner relationships
+- Custom nameplate
+
+### summon-tick
+
+Automatic behavior updates.
+
+- Look at target in combat
+- Track target location
+- Update stance based on combat state
+
+### summon-death
+
+Notifies owner of summon death.
+
+```yaml
+summon-death:
+  Skills:
+  - message{m="<dark_grey>[<red>!<dark_grey>] <grey>Your <white><caster.name> <grey>has fallen."} @UUID{u=<caster.var.owneruuid>}
+```

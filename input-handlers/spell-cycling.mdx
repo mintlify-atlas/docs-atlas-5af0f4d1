@@ -1,0 +1,314 @@
+---
+title: 'Spell Cycling'
+description: 'Bind up to 9 skills and cycle through them with Right-Click / Shift + Right Click'
+icon: 'rotate'
+---
+
+## Overview
+
+The Spell Cycling system allows you to bind up to 9 different spells or abilities to a single item and cycle through them using Right-Click (forward) or Shift + Right-Click (backward). The active spell is tracked using item NBT data.
+
+<Note>
+  This system is ideal for magic wands, multi-tool items, or any weapon that needs multiple modes without cluttering the hotbar.
+</Note>
+
+## How It Works
+
+1. **NBT Storage**: Spells are stored in the item's NBT under `spells.1.id`, `spells.2.id`, etc.
+2. **Active Index**: Current spell index is tracked in `activespell` NBT tag
+3. **Cycling**: Right-click cycles forward, Shift + Right-click cycles backward
+4. **Bounds Checking**: Automatically wraps around when reaching min/max spell count
+
+## NBT Structure
+
+Items using spell cycling should have the following NBT structure:
+
+```yaml
+MyWand:
+  Type: BLAZE_ROD
+  Options:
+    CustomNBT:
+      maxspells: 3
+      activespell: 1
+      spells:
+        1:
+          id: fireball-spell
+          name: "Fireball"
+        2:
+          id: heal-spell
+          name: "Heal"
+        3:
+          id: teleport-spell
+          name: "Teleport"
+```
+
+<ParamField path="maxspells" type="integer" required>
+  Maximum number of spells bound to this item (1-9).
+</ParamField>
+
+<ParamField path="activespell" type="integer" default="1">
+  Currently selected spell index (1 to maxspells).
+</ParamField>
+
+<ParamField path="spells.<index>.id" type="string" required>
+  The MythicMobs skill ID to execute for this spell slot.
+</ParamField>
+
+<ParamField path="spells.<index>.name" type="string">
+  Display name for the spell (optional, for UI feedback).
+</ParamField>
+
+## Core Skills
+
+### Casting Active Spell
+
+```yaml
+spell-cycle-cast:
+  Skills:
+  - setvar{var=skill.cycleindex;val="<trigger.item.hand.nbt.activespell>"}
+  - switch{condition=variableequals{var=skill.cycleindex;val=<case>};
+    cases=
+       case 1=[ - vskill{s=<trigger.item.hand.nbt.spells.1.id>} ]
+       case 2=[ - vskill{s=<trigger.item.hand.nbt.spells.2.id>} ]
+       case 3=[ - vskill{s=<trigger.item.hand.nbt.spells.3.id>} ]
+       case 4=[ - vskill{s=<trigger.item.hand.nbt.spells.4.id>} ]
+       case 5=[ - vskill{s=<trigger.item.hand.nbt.spells.5.id>} ]
+       case 6=[ - vskill{s=<trigger.item.hand.nbt.spells.6.id>} ]
+       case 7=[ - vskill{s=<trigger.item.hand.nbt.spells.7.id>} ]
+       case 8=[ - vskill{s=<trigger.item.hand.nbt.spells.8.id>} ]
+       case 9=[ - vskill{s=<trigger.item.hand.nbt.spells.9.id>} ]
+    } @self
+```
+
+### Cycling Right (Forward)
+
+```yaml
+spell-cycle-right:
+  Skills:
+  - setvar{var=skill.cycleindex;val="<trigger.item.hand.nbt.activespell>+1"}
+  - skill{s=spell-cycle-checkbounds}
+  - setItemNBT{key=activespell;value="<skill.var.cycleindex>"}
+```
+
+### Cycling Left (Backward)
+
+```yaml
+spell-cycle-left:
+  Skills:
+  - setvar{var=skill.cycleindex;val="<trigger.item.hand.nbt.activespell>-1"}
+  - skill{s=spell-cycle-checkbounds}
+  - setItemNBT{key=activespell;value="<skill.var.cycleindex>"}
+```
+
+### Bounds Checking
+
+```yaml
+spell-cycle-checkbounds:
+  Skills:
+  - sound{s=block.stone_pressure_plate.click_on;v=0.3;p=1.9;audience=self}
+  - setvar{var=skill.cycleindex;val=1} ?varinrange{var=skill.cycleindex;val=><trigger.item.hand.nbt.maxspells>}
+  - setvar{var=skill.cycleindex;val=<trigger.item.hand.nbt.maxspells>} ?varinrange{var=skill.cycleindex;val=<1}
+```
+
+<Note>
+  The bounds checking automatically wraps the index: cycling past the last spell goes to spell 1, cycling before spell 1 goes to the last spell.
+</Note>
+
+## Complete Item Example
+
+Mage wand with 5 spells:
+
+```yaml
+ArcaneWand:
+  Type: BLAZE_ROD
+  Display: '<gradient:#4A00E0:#8E2DE2>Arcane Wand</gradient>'
+  Options:
+    CustomNBT:
+      maxspells: 5
+      activespell: 1
+      spells:
+        1:
+          id: spell-fireball
+          name: "Fireball"
+        2:
+          id: spell-frostbolt
+          name: "Frostbolt"
+        3:
+          id: spell-lightning
+          name: "Lightning"
+        4:
+          id: spell-heal
+          name: "Heal"
+        5:
+          id: spell-shield
+          name: "Shield"
+  Skills:
+  # Cast active spell on left-click
+  - skill:spell-cycle-cast ~onAttack
+  
+  # Cycle forward on right-click
+  - skill:spell-cycle-right ~onUse
+  Conditions:
+  - crouching false
+  
+  # Cycle backward on shift + right-click
+  - skill:spell-cycle-left ~onUse
+  Conditions:
+  - crouching true
+```
+
+## Example Spells
+
+```yaml
+spell-fireball:
+  Cooldown: 3
+  Skills:
+  - message{m="<red>🔥 Fireball!"}
+  - projectile{t=FIREBALL;v=2;onEnd=fireball-explode}
+
+spell-frostbolt:
+  Cooldown: 2
+  Skills:
+  - message{m="<aqua>❄ Frostbolt!"}
+  - projectile{t=SNOWBALL;v=3;onEnd=frostbolt-freeze}
+
+spell-lightning:
+  Cooldown: 5
+  Skills:
+  - message{m="<yellow>⚡ Lightning!"}
+  - lightning @PIR{r=3}
+
+spell-heal:
+  Cooldown: 10
+  Skills:
+  - message{m="<green>❤ Heal!"}
+  - heal{a=20} @self
+  - effect:particles{p=heart;a=20}
+
+spell-shield:
+  Cooldown: 15
+  Skills:
+  - message{m="<blue>🛡 Shield!"}
+  - aura{name=shield;d=100;oe=shield-absorb}
+```
+
+## Visual Feedback
+
+Add visual indicators for spell cycling:
+
+```yaml
+spell-cycle-right:
+  Skills:
+  - setvar{var=skill.cycleindex;val="<trigger.item.hand.nbt.activespell>+1"}
+  - skill{s=spell-cycle-checkbounds}
+  - setItemNBT{key=activespell;value="<skill.var.cycleindex>"}
+  
+  # Visual feedback
+  - sound{s=block.stone_pressure_plate.click_on;v=0.3;p=1.9;audience=self}
+  - actionmessage{m="<gold>→ <white>Spell [<aqua><skill.var.cycleindex><white>/<gray><trigger.item.hand.nbt.maxspells><white>]"}
+  - actionmessage{m="<yellow><trigger.item.hand.nbt.spells.<skill.var.cycleindex>.name>"}
+```
+
+## Advanced: Dynamic Spell Names
+
+Display the spell name when cycling:
+
+```yaml
+spell-cycle-checkbounds:
+  Skills:
+  - sound{s=block.stone_pressure_plate.click_on;v=0.3;p=1.9;audience=self}
+  - setvar{var=skill.cycleindex;val=1} ?varinrange{var=skill.cycleindex;val=><trigger.item.hand.nbt.maxspells>}
+  - setvar{var=skill.cycleindex;val=<trigger.item.hand.nbt.maxspells>} ?varinrange{var=skill.cycleindex;val=<1}
+  
+  # Show spell name
+  - switch{condition=variableequals{var=skill.cycleindex;val=<case>};
+    cases=
+      case 1=[ - actionmessage{m="<red><trigger.item.hand.nbt.spells.1.name>"} ]
+      case 2=[ - actionmessage{m="<aqua><trigger.item.hand.nbt.spells.2.name>"} ]
+      case 3=[ - actionmessage{m="<yellow><trigger.item.hand.nbt.spells.3.name>"} ]
+      case 4=[ - actionmessage{m="<green><trigger.item.hand.nbt.spells.4.name>"} ]
+      case 5=[ - actionmessage{m="<blue><trigger.item.hand.nbt.spells.5.name>"} ]
+    }
+```
+
+## Multi-Tool Example
+
+Not just for magic - use for utility tools:
+
+```yaml
+MultiTool:
+  Type: DIAMOND_PICKAXE
+  Display: '<rainbow>Multi-Tool</rainbow>'
+  Options:
+    CustomNBT:
+      maxspells: 3
+      activespell: 1
+      spells:
+        1:
+          id: tool-veinminer
+          name: "Vein Miner"
+        2:
+          id: tool-treecutter
+          name: "Tree Cutter"
+        3:
+          id: tool-excavator
+          name: "Excavator"
+  Skills:
+  - skill:spell-cycle-cast ~onBreak
+  - skill:spell-cycle-right ~onSwing
+```
+
+## Limitations
+
+<Warning>
+  **Maximum 9 Spells**: The system supports up to 9 spells per item due to the switch statement structure. For more spells, consider using multiple items or a different system.
+</Warning>
+
+## Best Practices
+
+### 1. Provide Clear Feedback
+
+Always let players know which spell is active:
+
+```yaml
+- actionmessage{m="Active: <yellow><trigger.item.hand.nbt.spells.<trigger.item.hand.nbt.activespell>.name>"}
+```
+
+### 2. Use Appropriate Triggers
+
+- **~onUse**: For cycling (right-click)
+- **~onAttack**: For casting (left-click)
+- **~onSwing**: Alternative for casting
+
+### 3. Add Cooldowns
+
+Prevents spam casting:
+
+```yaml
+spell-fireball:
+  Cooldown: 3  # 3 second cooldown
+  Skills:
+  - ...
+```
+
+### 4. Organize Spell Order
+
+Group similar spells logically:
+- Offensive spells first
+- Defensive spells middle
+- Utility spells last
+
+## Performance Notes
+
+<Note>
+  The spell cycling system is marked as deprecated by the original author with the comment "I don't use this anymore, but it's here anyway." However, it remains functional and useful for multi-spell items.
+</Note>
+
+## Alternative: Item Ability System
+
+For more advanced spell management, consider using MythicMobs' built-in item ability system or custom GUI-based spell selection.
+
+## Related Systems
+
+- [Click Combos](/input-handlers/click-combos) - Input sequence-based casting
+- [Weapon Movesets](/input-handlers/weapon-movesets) - Combat combo system

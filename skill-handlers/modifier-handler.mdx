@@ -1,0 +1,308 @@
+---
+title: 'Modifier Handler'
+description: 'Create stacking buffs, debuffs, and Risk of Rain-style item systems with dynamic modifier triggers'
+---
+
+The modifier handler system allows you to create **stackable buffs and debuffs** that dynamically modify spell behavior. Perfect for implementing item systems, talents, or temporary power-ups similar to Risk of Rain.
+
+## Overview
+
+Modifiers are metaskills that trigger at specific points in the spell lifecycle. They can:
+
+- Modify spell variables (damage, cooldown, range, etc.)
+- Execute custom logic on spell cast, damage, or cooldown events
+- Stack multiple times for increased effect
+- Be dynamically added or removed during gameplay
+- Have priority-based execution order
+
+## How It Works
+
+The modifier system uses a **map-based architecture**:
+
+1. Modifiers are stored in `caster.modifier_map` with their parameters
+2. When triggered, modifiers are filtered by trigger type
+3. Filtered modifiers are sorted by priority (highest first)
+4. Each modifier metaskill executes in order
+
+```yaml modifier_handler.yml:118
+modifier-trigger:
+  Skills:
+  - return ?!varisset{var=caster.modifier_list}
+  - skill{s=modifier-parse_list}  # Filter and sort by trigger
+  - skill{s=modifier-execute}     # Execute in priority order
+```
+
+## Adding Modifiers
+
+<ParamField path="modifier_name" type="string" required>
+  Unique identifier for this modifier. Used for removal and stacking.
+  
+  ```yaml
+  modifier_name="Blazing Sun"
+  ```
+</ParamField>
+
+<ParamField path="o" type="metaskill" required>
+  The metaskill to execute when this modifier triggers. **Cannot be inline** - must reference a skill ID.
+  
+  ```yaml
+  o=modifier-blazing_sun
+  ```
+</ParamField>
+
+<ParamField path="trigger" type="string" default="PRECAST">
+  When this modifier should execute. Available triggers:
+  - `PRECAST` - Before spell evaluation
+  - `PRE_CAST` - Before spell execution
+  - `CAST` - After spell cast
+  - `PRE_DAMAGE` - Before damage calculation
+  - `DAMAGE` - After damage dealt
+  - `WEAPON_HIT` - On melee weapon hit
+  - `ABILITY_HIT` - On ability hit
+  - `CRITICAL_DAMAGE` - On critical hit
+  - `COOLDOWN_END` - When cooldown expires
+  - `COOLDOWN_RESET` - When cooldown manually reset
+  
+  ```yaml
+  trigger=CAST
+  ```
+</ParamField>
+
+<ParamField path="priority" type="integer" default="1">
+  Execution order - higher priority executes first. Priority levels:
+  - `1` - LOWEST
+  - `2` - LOW  
+  - `3` - MEDIUM
+  - `4` - HIGH
+  - `5` - SPELL SELECT
+  - `6` - SPELL EXECUTION
+  - `7` - MONITOR
+  
+  ```yaml
+  priority=7
+  ```
+</ParamField>
+
+<ParamField path="stacks" type="integer" default="1">
+  Numerical parameter for stacking modifiers. Can be used to scale effects within the modifier metaskill.
+  
+  By default, stacks will not override unless new stacks > old stacks.
+  
+  ```yaml
+  stacks=5
+  ```
+</ParamField>
+
+## Basic Example
+
+Add a damage-boosting modifier that reduces warmup:
+
+```yaml modifier_handler.yml:254
+blazing_sun-exec:
+  Skills:
+  - skill:modifier{modifier_name="Blazing Sun";o=modifier-blazing_sun} @self
+
+modifier-blazing_sun:
+  Skills:
+  - setvar{var=caster.blazing_sun;val=<caster.var.blazing_sun|3>-1} @self
+  - variableMath{var=damage;equation='x*20'}      # 20x damage boost!
+  - variableMath{var=warmup;equation='x*0.2'}    # 80% faster cast
+  - sound{s=peachtree:spellbound_battlemage.castshort;pitch=1;volume=3} @self
+  
+  - skill{s=modifier-blazing_sun-remove}
+
+modifier-blazing_sun-remove:
+  Conditions:
+  - varinrange{var=caster.blazing_sun;val=<1}
+  Skills:
+  - variableUnset{var=caster.blazing_sun}
+  - skill{s=modifier-remove;modifier_name=Blazing Sun}
+```
+
+## Triggering Modifiers
+
+Manually trigger modifiers at any point:
+
+```yaml
+my_spell:
+  Skills:
+  - skill{s=modifier-trigger;trigger=PRE_CAST} @self
+  - damage{a=<skill.var.damage>} @target
+  - skill{s=modifier-trigger;trigger=CAST} @self
+```
+
+The spell handler automatically triggers modifiers at key points:
+
+```yaml spell_handler.yml:54
+spell-execute:
+  Skills:
+  - skill{s=modifier-trigger;trigger=PRE_CAST}
+  - skill{s=spell-critical}
+  - skill{s=spell-select}
+```
+
+## Removing Modifiers
+
+Remove by name:
+
+```yaml
+modifier-remove:
+  Skills:
+  - skill{s=modifier-remove;modifier_name=Blazing Sun} @self
+```
+
+Clear all modifiers:
+
+```yaml
+modifier-clear:
+  Skills:
+  - skill{s=modifier-clear} @self
+```
+
+## Stacking System
+
+Modifiers with the same name can stack. Use the `stacks` parameter to scale effects:
+
+```yaml modifier_handler.yml:247
+modifier-test3:
+  Skills:
+  - skill:modifier{o=avarice;modifier_name="Avarice";trigger=something;priority=9;stacks=9} @self
+  - skill:modifier{o=avarice;modifier_name="Avarice";trigger=something;priority=9;stacks=3} @self
+  # Only the 9 stack version is kept (9 > 3)
+```
+
+Access stack count in your modifier:
+
+```yaml
+modifier-avarice:
+  Skills:
+  - variableMath{var=damage;equation='x*(1+<caster.var.modifier_map.avarice.tolist.3>*0.1)'}  # +10% per stack
+```
+
+## Risk of Rain Style Items
+
+Create a modular item system where items add modifiers:
+
+```yaml
+item-lens_makers_glasses:
+  Skills:
+  - skill:modifier{modifier_name="Lens-Maker's Glasses";o=modifier-lens_makers;
+    trigger=PRE_CAST;priority=6;stacks=1} @self
+
+modifier-lens_makers:
+  Skills:
+  # Get stack count from modifier map
+  - setvar{var=stacks;val=<caster.var.modifier_map.modifier-lens_makers.tolist.3>}
+  # +10% crit chance per stack
+  - variableMath{var=critical_chance;equation='x+(<skill.var.stacks>*0.1)'}
+
+item-crowbar:
+  Skills:
+  - skill:modifier{modifier_name="Crowbar";o=modifier-crowbar;
+    trigger=PRE_DAMAGE;priority=5} @self
+
+modifier-crowbar:
+  Skills:
+  # Deal 75% more damage to targets above 90% health
+  - return ?comparevalue{v1=<target.hp>;op=<;v2=<target.mh.mul.0.9>}
+  - variableMath{var=damage;equation='x*1.75'}
+```
+
+## Modifier Chain Example
+
+Multiple modifiers executing in priority order:
+
+```yaml modifier_handler.yml:232
+modifier-test2:
+  Skills:
+  - skill:modifier{o=avarice;modifier_name="Avarice";trigger=something;priority=9} @self
+  - skill:modifier{o=burst;modifier_name="Burst";trigger=something;priority=7} @self
+  - skill:modifier{o=blazing_sun;modifier_name="Blazing Sun";trigger=something;priority=7} @self
+  - skill:modifier{o=phanon;modifier_name="Phanon";trigger=something;priority=6} @self
+  - skill:modifier{o=sunfire_lance;modifier_name="Sunfire Lance";trigger=something;priority=6} @self
+  - skill:modifier{o=lazarus;modifier_name="Lazarus";trigger=something;priority=3} @self
+  - skill:modifier{o=reconsolidation;modifier_name="Reconsolidation";trigger=something;priority=7} @self
+  
+  - skill:modifier-trigger{trigger=something} @self
+  # Execution order: Avarice(9) → Burst(7) → Blazing Sun(7) → Reconsolidation(7) → 
+  #                  Phanon(6) → Sunfire Lance(6) → Lazarus(3)
+```
+
+## Temporary Modifiers with Auras
+
+Combine modifiers with auras for temporary buffs:
+
+```yaml modifier_handler.yml:280
+sunfire_lance-exec:
+  Skills:
+  - skill:modifier-add{modifier_name="Sunfire Lance";type=STRIKE;trigger=CAST;o=modifier-sunfire_lance} @self
+
+modifier-sunfire_lance:
+  Skills:
+  - aura{modifier_name=sunfire_lance;d=2*20;i=1;ma=true;rd=false;bt=true;bartimertext=Sunfire Lance;
+    oe=[ 
+      - skill{s=modifier-remove;modifier_name=Sunfire Lance}  # Auto-remove after 2 seconds
+      ]} @self
+```
+
+## Important Warnings
+
+<Warning>
+  **DO NOT** call `modifier-add` or `modifier-trigger` within a modifier metaskill itself. This can cause infinite loops or unexpected behavior.
+  
+  ```yaml
+  # ❌ BAD - Creates infinite loop
+  modifier-bad:
+    Skills:
+    - skill:modifier{modifier_name="Another";o=something} @self
+  
+  # ✅ GOOD - Modifiers should only modify variables
+  modifier-good:
+    Skills:
+    - variableMath{var=damage;equation='x*2'}
+  ```
+</Warning>
+
+## Advanced: Insertion Sort
+
+Modifiers are sorted using insertion sort for deterministic ordering:
+
+```yaml modifier_handler.yml:163
+modifier-insertion_sort:
+  Skills:
+  - setvar{var=list;val=<skill.list>;type=list}
+  - setvar{var=list_size;val=<skill.var.list.size>;type=INTEGER}
+  - setvar{var=order;val=<skill.order|asc>;type=STRING}  # "asc" or "desc"
+  - return ?comparevalue{val1=<skill.var.list_size>;op=<=;val2=1}
+  
+  - foreachvalue{skill=modifier-sort_insert;values=<skill.list>}
+```
+
+## Debugging
+
+Enable debug mode to see modifier execution:
+
+```yaml
+- setvar{var=debug;val=true;type=STRING}
+- skill:modifier-trigger{trigger=CAST} @self
+# Shows: "Collected <modifier_list>" and "Executing <modifier_name>"
+```
+
+## Map Data Structure
+
+Modifiers are stored in this format:
+
+```
+modifier_map:
+  operation_name: [modifier_name, trigger, priority, stacks]
+
+Example:
+  modifier_map:
+    modifier-blazing_sun: ["Blazing Sun", "PRECAST", 7, 1]
+    modifier-avarice: ["Avarice", "CAST", 9, 5]
+```
+
+## Related Systems
+
+- [Spell Casting Handler](/skill-handlers/spell-casting) - Uses modifiers for spell behavior
+- [Damage Core](/skill-handlers/damage-core) - Triggers PRE_DAMAGE and DAMAGE modifiers

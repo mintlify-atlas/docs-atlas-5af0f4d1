@@ -1,0 +1,357 @@
+---
+title: Healing System
+description: Custom healing-over-time mechanic with damage interrupt thresholds and visual feedback
+---
+
+## Overview
+
+The **Heal** mechanic provides a healing-over-time (HoT) system with built-in interrupt mechanics. If the target takes too much damage during the healing period, the healing effect is cancelled.
+
+<Note>
+  The source code includes a note: "i can do much better than this, but I haven't had the time to rework this one yet."
+  
+  This is a functional implementation that can be used as-is or as a reference for building more advanced healing systems.
+</Note>
+
+## Features
+
+- **Healing-Over-Time**: Gradual healing over a duration
+- **Damage Interrupt**: Stops healing if damage exceeds threshold
+- **Boss Bar Display**: Shows healing progress and rate
+- **Visual Feedback**: Particles and sounds
+- **Percentage-Based**: Heals based on max health percentage
+
+## Basic Usage
+
+```yaml
+healing_spell:
+  Skills:
+  - skill:heal{
+      heal=5;
+      duration=3;
+      interval=1;
+      max_damage=10
+    } @self
+```
+
+## Parameters
+
+<ParamField path="heal" type="float" default="5">
+  Total amount of healing to apply over the duration (in health points)
+</ParamField>
+
+<ParamField path="duration" type="float" default="1">
+  Duration of the healing effect in seconds
+</ParamField>
+
+<ParamField path="interval" type="integer" default="1">
+  Tick interval between healing applications
+</ParamField>
+
+<ParamField path="max_damage" type="integer" default="2">
+  Maximum damage that can be taken before healing is interrupted
+</ParamField>
+
+## How It Works
+
+### Healing Calculation
+
+The healing is split across the duration:
+
+```yaml
+heal-apply:
+  Skills:
+  - setvar{var=duration;val="<skill.duration|1>*20";type=FLOAT}
+  - setvar{var=interval;val="<skill.interval|1>";type=INTEGER}
+  - setvar{var=heal;val=<skill.heal|5>;type=FLOAT}
+  
+  # Calculate heal per tick
+  - setvar{var=healamount;
+      val="<skill.var.heal>/<skill.duration>/(20/<skill.var.interval>)";
+      type=FLOAT}
+  
+  # Convert to percentage for healpercent mechanic
+  - setvar{var=healamount-percent;
+      val="<skill.var.healamount>*100*(20/<skill.var.interval>)";
+      type=FLOAT}
+  
+  # Calculate actual health restored (for display)
+  - setvar{var=healamount-actual;
+      val="<skill.var.healamount-percent>/200*<caster.mhp>";
+      type=FLOAT}
+```
+
+Example:
+- **heal=5**, **duration=5**, **interval=1** (ticks at 20 TPS)
+- Ticks per second: 20 / 1 = 20
+- Total ticks: 5 * 20 = 100
+- Heal per tick: 5 / 100 = 0.05 HP
+- Display: Shows as HP/s
+
+### Damage Tracking
+
+The `onDamaged` aura tracks accumulated damage:
+
+```yaml
+- onDamaged{
+    auraName=heal;
+    d="<skill.var.duration>+<skill.var.interval>";
+    i=<skill.var.interval>;
+    overwrite=true;
+    bartimer=true;
+    bartimerdisplay="<#A8D3AA>Healing %formatter_number_round_2_<skill.var.healamount-actual>%<#DC143C>❤<#A8D3AA>/s";
+    cod=true;cocw=true;coq=true;cocd=true;
+    onHit=heal-onhit;
+    onTick=heal-tick
+  }
+```
+
+### Interrupt Logic
+
+```yaml
+heal-onhit:
+  Conditions:
+  - damagecause{cause=SUFFOCATION} false
+  - damagecause{cause=STARVATION} false
+  - damagecause{cause=FIRE_TICK} false
+  - damagecause{cause=HOT_FLOOR} false
+  - damagecause{cause=POISON} false
+  - damagecause{cause=WITHER} false
+  Skills:
+  - variableMath{var=skill.accdmg;equation="<skill.var.accdmg>+<skill.var.damage-amount>"}
+  - skill{s=heal-interrupt}
+
+heal-interrupt:
+  Conditions:
+  - variableInRange{var=skill.accdmg;val=><skill.var.max_damage>}
+  Skills:
+  - sound{s=block.beacon.deactivate;pitch=1.75;volume=0.6}
+  - sound{s=block.fire.extinguish;pitch=2;volume=0.3}
+  - am{m="&fHealing Interrupted"}
+  - removeaura{aura=heal}
+```
+
+Key points:
+- Ignores passive damage sources (suffocation, poison, etc.)
+- Accumulates damage taken during healing
+- Interrupts when accumulated damage ≥ `max_damage`
+
+### Visual Effects
+
+```yaml
+heal-vfx:
+  Skills:
+  - e:p{p=dust_color_transition;color=#03DF04;color2=#D8FCD8;amount=1;size=0.8;hs=0.5;ys=0.6;y=1}
+  - e:p{p=entity_effect;color=#62F163;amount=1;hs=0.3;ys=0.6;y=1} 0.5
+  - e:p{p=composter;amount=2;size=0.8;hs=0.3;ys=0.6;y=1;cd=0.25}
+```
+
+Plays green particles at each healing tick.
+
+## Examples
+
+### Self-Heal Ability
+
+```yaml
+self_heal:
+  Cooldown: 15
+  Skills:
+  - skill:heal{
+      heal=10;
+      duration=5;
+      interval=1;
+      max_damage=15
+    } @self
+  - message{m="<green>Regenerating health..."} @self
+  - sound{s=block.beacon.power_select;p=1.2;v=0.8} @self
+```
+
+### Area Heal
+
+```yaml
+area_heal:
+  Cooldown: 30
+  Skills:
+  - skill:heal{
+      heal=8;
+      duration=6;
+      interval=1;
+      max_damage=12
+    } @PIR{r=8}
+  - e:p{p=heart;a=20;y=2;hs=4;ys=1;zs=4} @self
+  - sound{s=block.beacon.ambient;p=1.5;v=1.5} @self
+```
+
+### Channeled Heal
+
+```yaml
+channeled_heal:
+  Skills:
+  - cast{onTick=channeled_heal-tick;d=60;i=10} @self
+
+channeled_heal-tick:
+  Conditions:
+  - targetwithin 20
+  Skills:
+  - skill:heal{
+      heal=3;
+      duration=0.5;
+      interval=1;
+      max_damage=5
+    } @target
+  - e:pl{origin=@selfEyeLocation;p=villager_happy;a=2} @target
+```
+
+### Conditional Healing
+
+```yaml
+conditional_heal:
+  Conditions:
+  - hpbelow 50
+  Skills:
+  - skill:heal{
+      heal="(<caster.mhp>-<caster.hp>)*0.3";
+      duration=4;
+      interval=1;
+      max_damage=20
+    } @self
+  - message{m="<yellow>Emergency healing activated!"} @self
+```
+
+### Healing Totem
+
+```yaml
+healing_totem:
+  Skills:
+  - summon{t=ARMOR_STAND;d=200;i=INVISIBLE} @self
+  - aura{name=healing_totem;d=200;i=20;
+      onTick=healing_totem-tick} @lastSpawnedEntity
+
+healing_totem-tick:
+  Skills:
+  - skill:heal{
+      heal=4;
+      duration=1;
+      interval=1;
+      max_damage=8
+    } @PlayersInRadius{r=10}
+  - e:p{p=heart;a=3;hs=5;ys=2;zs=5} @self
+```
+
+## Advanced Usage
+
+### Scaling Heal
+
+```yaml
+scaling_heal:
+  Skills:
+  - setvar{var=power;val=<caster.level>/10;type=FLOAT} @self
+  - skill:heal{
+      heal="5+<caster.var.power>*2";
+      duration=5;
+      interval=1;
+      max_damage=10
+    } @self
+```
+
+### Percentage-Based Healing
+
+```yaml
+percent_heal:
+  Skills:
+  - setvar{var=heal_amount;val="<target.mhp>*0.3";type=FLOAT} @target
+  - skill:heal{
+      heal=<caster.var.heal_amount>;
+      duration=6;
+      interval=1;
+      max_damage=15
+    } @target
+```
+
+### Combat vs. Out-of-Combat
+
+```yaml
+adaptive_heal:
+  Skills:
+  # In combat: weak, high interrupt threshold
+  - skill:heal{heal=3;duration=3;max_damage=5} @self ~oncombat
+  
+  # Out of combat: strong, low interrupt threshold
+  - skill:heal{heal=15;duration=8;max_damage=2} @self ~oncombat false
+```
+
+## Boss Bar Display
+
+The healing displays a boss bar with:
+- **Color**: Green (`bartimercolor=GREEN`)
+- **Style**: Segmented 10 bars (`bartimerstyle=SEGMENTED_10`)
+- **Text**: Shows healing rate per second
+
+```yaml
+bartimerdisplay="<#A8D3AA>Healing %formatter_number_round_2_<skill.var.healamount-actual>%<#DC143C>❤<#A8D3AA>/s"
+```
+
+Example display:
+```
+Healing 2.50❤/s
+[██████████░░░░░░░░░░]
+```
+
+## Performance Notes
+
+- **Interval**: Lower intervals (faster ticks) = smoother healing but more performance cost
+- **Area Heals**: Be cautious with large radius + many targets
+- **Boss Bars**: One per target, minimal performance impact
+
+<Tip>
+  For most use cases, `interval=1` (1 tick = 0.05s) provides smooth healing without performance issues.
+</Tip>
+
+## Integration with Other Systems
+
+The heal system can be combined with:
+
+```yaml
+advanced_heal:
+  Skills:
+  # Apply heal
+  - skill:heal{heal=10;duration=5;max_damage=12} @target
+  
+  # Add buff during healing
+  - aura{name=healing_buff;d=100;i=1;
+      onTick=[- potion{type=DAMAGE_RESISTANCE;d=5;l=1}]
+    } @target
+  
+  # Remove debuffs
+  - potionclear{types=POISON,WITHER} @target
+  
+  # Visual ring
+  - skill:vfx-particle_shockwave{radius=2;points=32;particle=heart} @target
+```
+
+## Limitations
+
+<Warning>
+  The current implementation uses a single accumulated damage variable. If you need per-source damage tracking or more complex interrupt logic, you'll need to extend the system.
+</Warning>
+
+<Note>
+  Passive damage sources (poison, wither, fire tick, etc.) are ignored for interrupt calculations. This prevents environmental damage from constantly breaking healing.
+</Note>
+
+## Comparison to Native Mechanics
+
+Vs. `potion{type=REGENERATION}`:
+- ✅ Custom interrupt logic
+- ✅ Boss bar display
+- ✅ Visual customization
+- ✅ Flexible damage thresholds
+- ❌ More complex setup
+- ❌ Slightly higher performance cost
+
+Vs. `heal` mechanic:
+- ✅ Gradual healing instead of instant
+- ✅ Interruptible
+- ✅ Visual feedback
+- ❌ More complex
+- ❌ Requires aura management

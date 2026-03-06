@@ -1,0 +1,380 @@
+---
+title: Particle VFX Systems
+description: Spiral and shockwave particle effect handlers for advanced visual feedback
+---
+
+## Overview
+
+The **Particle VFX** systems provide reusable handlers for creating advanced particle effects. These include spiral patterns and radial shockwaves.
+
+<Warning>
+  Source documentation is minimal. These handlers are provided as-is for customization.
+</Warning>
+
+## Particle Spiral
+
+Creates a spiral particle effect that animates over time.
+
+### Basic Usage
+
+```yaml
+spiral_attack:
+  Skills:
+  - skill:vfx-particle_spiral{
+      duration=12;
+      radius=2;
+      arc=360;
+      points=32;
+      particle=flame
+    } @target
+```
+
+### Parameters
+
+<ParamField path="duration" type="integer" default="4">
+  Duration of the spiral animation in ticks
+</ParamField>
+
+<ParamField path="radius" type="float" default="2">
+  Radius of the spiral
+</ParamField>
+
+<ParamField path="outer_radius" type="float" default="radius">
+  Outer radius if different from inner radius
+</ParamField>
+
+<ParamField path="arc" type="integer" default="360">
+  Arc angle in degrees (360 for full circle)
+</ParamField>
+
+<ParamField path="points" type="integer" default="32">
+  Number of particle points along the spiral
+</ParamField>
+
+<ParamField path="yaw" type="float" default="0">
+  Yaw rotation offset
+</ParamField>
+
+<ParamField path="pitch" type="float" default="0">
+  Pitch rotation offset
+</ParamField>
+
+<ParamField path="roll" type="float" default="0">
+  Roll rotation offset
+</ParamField>
+
+<ParamField path="twoside" type="boolean" default="false">
+  Randomize roll for varied patterns
+</ParamField>
+
+<ParamField path="particle" type="string" default="FLAME">
+  Particle type to display
+</ParamField>
+
+<ParamField path="speed" type="float" default="0.2">
+  Particle animation speed
+</ParamField>
+
+<ParamField path="reverse" type="boolean" default="false">
+  Reverse particle direction
+</ParamField>
+
+<ParamField path="vfx" type="skill" default="vfx-particle_spiral-default">
+  Custom VFX skill to override default particles
+</ParamField>
+
+### Implementation
+
+```yaml
+vfx-particle_spiral:
+  Skills:
+  - skill{s=vfx-particle_spiral-exec;branch=true}
+
+vfx-particle_spiral-exec:
+  Skills:
+  - skill{s=vfx-particle_spiral-init}
+  - slash{fromorigin=true;a=<skill.var.arc>;w=<skill.var.radius>;h=<skill.var.radius>;p=<skill.var.points>;
+      yaw=<skill.var.yaw>;pitch=<skill.var.pitch>;roll=<skill.var.roll>;duration=<skill.var.duration>;
+      mpd=false;dtt=true;fo=0;yo=0;
+      oP=vfx-particle_spiral-point}
+
+vfx-particle_spiral-default:
+  Skills:
+  - vskill{s=[ - e:p{fo=true;p=<skill.var.particle>;a=1;directional=true;directionreversed=<skill.var.reverse>;speed=<skill.var.speed>} ]}
+```
+
+### Examples
+
+#### Projectile Trail
+
+```yaml
+spiral_projectile:
+  Skills:
+  - projectile{fo=true;origin=@selfeyelocation;v=16;md=32;i=1;
+      ot=spiral_projectile-tick;
+      onHit=[- damage{a=25}]
+    } @forward{f=3;uel=true}
+
+spiral_projectile-tick:
+  Skills:
+  - skill{s=vfx-particle_spiral;
+      arc=360;
+      speed=0.1;
+      duration=1;
+      radius=<random.float.1to2>;
+      roll=90+<random.-90to90>;
+      pitch=<random.-12to12>;
+      yaw=<random.-12to12>
+    } @projectileforward{f=3}
+```
+
+#### Ground Effect
+
+```yaml
+spiral_aoe:
+  Skills:
+  - skill{repeat=12;repeati=1;
+      s=[
+        - skill{s=vfx-particle_spiral;
+            duration=12;
+            radius=2;
+            roll=<random.-12to12>;
+            pitch=<random.-12to12>;
+            yaw=45+<random.-12to12>;
+            arc=360;
+            particle=end_rod
+          }
+      ]
+    } @target
+  - delay 20
+  - damage{a=40} @EntitiesInRadius{r=3}
+```
+
+## Particle Shockwave
+
+Creates a radial shockwave particle effect expanding outward.
+
+### Basic Usage
+
+```yaml
+shockwave_slam:
+  Skills:
+  - skill:vfx-particle_shockwave{
+      origin=@selfLocation;
+      points=100;
+      length=3;
+      radius=15;
+      particle=cloud
+    } @selfLocation
+```
+
+### Parameters
+
+<ParamField path="points" type="integer" default="8">
+  Number of radial points around the circle
+</ParamField>
+
+<ParamField path="radius" type="float" default="1">
+  Radius of the shockwave
+</ParamField>
+
+<ParamField path="length" type="float" default="1">
+  Length of particle trails extending from each point
+</ParamField>
+
+<ParamField path="speed" type="float" default="1">
+  Particle animation speed
+</ParamField>
+
+<ParamField path="rotation" type="float" default="0">
+  Rotation offset
+</ParamField>
+
+<ParamField path="yaw" type="float" default="0">
+  Yaw rotation
+</ParamField>
+
+<ParamField path="pitch" type="float" default="0">
+  Pitch rotation
+</ParamField>
+
+<ParamField path="roll" type="float" default="0">
+  Roll rotation
+</ParamField>
+
+<ParamField path="particle" type="string" default="spark">
+  Particle type to display
+</ParamField>
+
+<ParamField path="debug" type="boolean" default="false">
+  Show debug particles
+</ParamField>
+
+<ParamField path="vfx" type="skill" default="vfx-particle_shockwave-default">
+  Custom VFX skill
+</ParamField>
+
+<ParamField path="onPoint" type="skill">
+  Skill executed at each radial point
+</ParamField>
+
+### Implementation
+
+```yaml
+vfx-particle_shockwave:
+  Skills:
+  - skill{s=vfx-particle_shockwave-init}
+  - setvarloc{var=origin_loc;val=@targetedlocation} @targetedlocation
+  
+  - slash{fromorigin=true;origin=@origin;mpd=false;dtt=true;fo=0;yo=0;
+      angle=360;points=<skill.var.points>;w=<skill.var.radius>;h=<skill.var.radius>;duration=0;
+      pitch="90+<skill.var.pitch>";yaw=<skill.var.yaw>;roll=<skill.var.roll>;
+      oP=[
+        - projectile{fo=true;origin=@variablelocation{var=origin_loc;yo=0};
+            syo=0;sfo=0;ham=true;drawhitbox=false;
+            v=1;mr=1;md=1;g=0;hnp=true;sb=false;se=false;
+            os=vfx-particle_shockwave-point} @targetedlocation
+        - vskill{s=<skill.onPoint|[ - e:p{p=end_rod;a=1} ?varequals{var=debug;val=true} ]>}
+      ]}
+
+vfx-particle_shockwave-point:
+  Skills:
+  - vskill{origin=@projectileforward{f=<skill.var.length>};
+      s=<skill.vfx|vfx-particle_shockwave-default>} @projectileforward{f="<skill.var.length>+1"}
+
+vfx-particle_shockwave-default:
+  Skills:
+  - vskill{s=[ - e:p{fo=true;p=<skill.var.particle>;a=1;directional=true;directionreversed=<skill.var.reverse>;speed=<skill.var.speed>} ]}
+```
+
+### Examples
+
+#### Ground Slam
+
+```yaml
+ground_slam:
+  Skills:
+  - jump{v=1}
+  - delay 15
+  - skill:vfx-particle_shockwave{
+      origin=@selfLocation;
+      points=60;
+      length=2;
+      radius=8;
+      particle=cloud;
+      speed=0.5
+    } @selfLocation
+  - damage{a=35} @EntitiesInRadius{r=8}
+  - throw{v=2;vy=0.8} @EntitiesInRadius{r=8}
+  - sound{s=entity.generic.explode;v=2;p=0.6}
+```
+
+#### Expanding Wave
+
+```yaml
+expanding_wave:
+  Skills:
+  - skill{repeat=20;repeati=1;
+      s=[
+        - skill:vfx-particle_shockwave{
+            radius="<skill.var.itr>*0.5";
+            points=32;
+            length=1;
+            particle=electric_spark
+          } @selfLocation
+      ]}
+```
+
+#### Custom Color Shockwave
+
+```yaml
+color_shockwave:
+  Skills:
+  - skill:vfx-particle_shockwave{
+      points=48;
+      radius=10;
+      length=2;
+      vfx=color_shockwave_particle
+    } @selfLocation
+
+color_shockwave_particle:
+  Skills:
+  - e:p{fo=true;p=dust;color=#FF0000;size=1.5;a=2;directional=true;speed=0.3}
+  - e:p{fo=true;p=dust;color=#FFAA00;size=1.0;a=1;directional=true;speed=0.5}
+```
+
+## Aliases
+
+- `particle_shockwave` → `vfx-particle_shockwave`
+
+## Custom VFX Override
+
+Both systems support custom VFX skills:
+
+```yaml
+my_spiral:
+  Skills:
+  - skill:vfx-particle_spiral{
+      radius=3;
+      duration=20;
+      vfx=my_custom_spiral_particles
+    } @target
+
+my_custom_spiral_particles:
+  Skills:
+  - e:p{fo=true;p=flame;a=3;speed=0.2}
+  - e:p{fo=true;p=smoke_large;a=1;speed=0.1}
+  - e:p{fo=true;p=drip_lava;a=1} 0.5
+```
+
+## Performance Considerations
+
+<Warning>
+  High `points` values (>100) can cause performance issues on lower-end clients. Balance visual quality with performance.
+</Warning>
+
+**Recommendations:**
+- Spiral: 24-48 points for most effects
+- Shockwave: 32-64 points for typical radius (1-10 blocks)
+- Use `directional=true` and `speed` values to optimize particle behavior
+- Limit concurrent effects in crowded areas
+
+## Combining Effects
+
+You can layer multiple effects:
+
+```yaml
+combined_effect:
+  Skills:
+  # Inner spiral
+  - skill:vfx-particle_spiral{
+      radius=1;
+      duration=20;
+      particle=soul_fire_flame
+    } @target
+  
+  # Outer shockwave
+  - skill:vfx-particle_shockwave{
+      radius=6;
+      points=48;
+      length=1.5;
+      particle=soul
+    } @target
+  
+  # Ground particles
+  - e:p{p=explosion_normal;a=20;y=0.1;hs=3;ys=0.1;zs=3} @target
+```
+
+## Tips
+
+<Tip>
+  Use `branch=true` when calling these skills if you don't want them to inherit variables from the parent skill.
+</Tip>
+
+<Tip>
+  The `fromorigin=true` parameter in slash mechanics allows these effects to work correctly with custom origin points.
+</Tip>
+
+<Note>
+  Both systems use the slash mechanic as their foundation, which creates the radial point distribution. The particles are then applied at each point along the pattern.
+</Note>

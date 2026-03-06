@@ -1,0 +1,334 @@
+---
+title: Projectile Spread Systems
+description: Create diverse projectile patterns including arcing spreads, radial barrages, and random distributions with piercing support
+---
+
+## Overview
+
+The **Projectile Spread** system provides reusable handlers for creating various projectile patterns. It includes mechanics for arc-based spreads, alternating barrages, and piercing projectiles.
+
+## Projectile Spread
+
+Fires projectiles in an arc pattern from a single origin point.
+
+### Basic Usage
+
+```yaml
+my_spread_attack:
+  Skills:
+  - skill:projectile_spread{
+      origin=@SelfEyeLocation;
+      points=5;
+      arc=45;
+      radius=8;
+      id=[
+        - projectile{v=40;onHit=[- damage{a=10}]}
+      ]
+    } @forward{f=1;uel=true}
+```
+
+### Parameters
+
+<ParamField path="points" type="integer" default="3">
+  Number of projectiles to fire
+</ParamField>
+
+<ParamField path="arc" type="integer" default="points * 8">
+  Total arc angle in degrees across which projectiles are distributed
+</ParamField>
+
+<ParamField path="radius" type="float" default="6">
+  Distance from origin where projectiles are fired toward
+</ParamField>
+
+<ParamField path="duration" type="integer" default="0">
+  Animation duration in ticks (0 for instant)
+</ParamField>
+
+<ParamField path="yaw" type="float" default="0">
+  Yaw rotation offset
+</ParamField>
+
+<ParamField path="pitch" type="float" default="0">
+  Pitch rotation offset
+</ParamField>
+
+<ParamField path="roll" type="float" default="0">
+  Roll rotation offset
+</ParamField>
+
+<ParamField path="twoside" type="boolean" default="true">
+  Randomize roll for varied patterns
+</ParamField>
+
+<ParamField path="id" type="skill[]" required>
+  Skills to execute at each projectile spawn point (typically projectile mechanics)
+</ParamField>
+
+### Example: Five Arrow Spread
+
+```yaml
+arrow_spread:
+  Skills:
+  - skill:projectile_spread{
+      points=5;
+      arc=60;
+      radius=10;
+      id=[
+        - projectile{type=ARROW;v=60;md=40;onHit=[- damage{a=12}]}
+      ]
+    } @SelfEyeLocation
+```
+
+### Example: Shotgun Pattern
+
+```yaml
+shotgun_blast:
+  Skills:
+  - skill:projectile_spread{
+      points=8;
+      arc=30;
+      radius=6;
+      id=[
+        - projectile{v=80;md=15;hR=0.3;vR=0.3;
+            onHit=[- damage{a=8}];
+            onTick=[- e:p{p=smoke;a=1}]
+          }
+      ]
+    } @SelfEyeLocation
+```
+
+## Projectile Barrage
+
+Fires projectiles in an alternating left-right pattern, creating a barrage effect.
+
+### Basic Usage
+
+```yaml
+my_barrage:
+  Skills:
+  - skill:projectile_barrage{
+      points=12;
+      spread=8;
+      accuracy=0.95;
+      id=[
+        - projectile{v=50;onHit=[- damage{a=15}]}
+      ]
+    } @SelfEyeLocation
+```
+
+### Parameters
+
+<ParamField path="points" type="integer" default="3">
+  Number of projectiles to fire in sequence
+</ParamField>
+
+<ParamField path="spread" type="float" default="points * 2">
+  Angular spread in degrees for left-right alternation
+</ParamField>
+
+<ParamField path="accuracy" type="float" default="1.0">
+  Accuracy value (0.0-1.0). Lower values increase random deviation.
+</ParamField>
+
+<ParamField path="radius" type="float" default="1">
+  Radial offset scale
+</ParamField>
+
+<ParamField path="id" type="skill[]" required>
+  Skills to execute for each projectile
+</ParamField>
+
+### How It Works
+
+The barrage alternates sides using:
+
+```yaml
+projectile_barrage-fire:
+  Skills:
+  # Calculate which side (1 or -1)
+  - setvar{var=side;val="2*(<skill.var.itr>%2)-1";type=INTEGER}
+  
+  # Apply roll based on side
+  - setvar{var=roll;val="<skill.var.roll|0>+<skill.var.spread>+<skill.var.side>*180"}
+  
+  # Add random deviation based on accuracy
+  - raytraceto{locationskill=[
+      - setvarloc{var=targetloc;v=@RLNT{a=1;r=<skill.var.deviation|0>}}
+    ]} @forward{f=12;uel=true}
+```
+
+### Example: Rapid Fire Barrage
+
+```yaml
+rapid_barrage:
+  Skills:
+  - skill:projectile_barrage{
+      points=20;
+      spread=15;
+      accuracy=0.85;
+      id=[
+        - projectile{v=70;md=30;hR=0.4;vR=0.4;
+            onHit=[- damage{a=8}];
+            onTick=[- e:p{p=flame;a=2}]
+          }
+      ]
+    } @SelfEyeLocation
+```
+
+## Piercing System
+
+Track and limit how many entities a projectile can hit before stopping.
+
+### Initialization
+
+Call `pierce-init` when creating the projectile:
+
+```yaml
+piercing_arrow:
+  Skills:
+  - skill:pierce-init{pierce=3} @self
+  - projectile{v=60;i=20;md=40;
+      onHit=piercing_arrow-hit;
+      onTick=[- e:p{p=end_rod;a=1}]
+    } @forward{f=2;uel=true}
+```
+
+### On Hit Logic
+
+Call `pierce-hit` when the projectile hits an entity:
+
+```yaml
+piercing_arrow-hit:
+  Skills:
+  - damage{a=15}
+  - skill:pierce-hit @self
+```
+
+### Parameters
+
+<ParamField path="pierce" type="integer" default="1">
+  Maximum number of entities the projectile can hit
+</ParamField>
+
+<ParamField path="debug" type="boolean" default="false">
+  Show debug messages about pierce count
+</ParamField>
+
+### How It Works
+
+```yaml
+pierce-init:
+  Skills:
+  - setvar{var=pierce;val=<skill.pierce|1>;type=INTEGER} @self
+  - setvar{var=hits;val=0;type=INTEGER} @self
+
+pierce-hit:
+  Skills:
+  - setvar{var=hits;val="<skill.var.hits|0>+1";type=INTEGER} @self
+  - skill{s=pierce-end_projectile}
+
+pierce-end_projectile:
+  Conditions:
+  - ( varinrange{var=hits;val=><skill.var.pierce>} || varequals{var=hits;val=<skill.var.pierce>} )
+  - projectileHasEnded false
+  Skills:
+  - endprojectile
+```
+
+The projectile tracks hits and ends itself when reaching the maximum pierce count.
+
+### Example: Triple Pierce Arrow
+
+```yaml
+triple_pierce:
+  Skills:
+  - skill:pierce-init{pierce=3} @self
+  - projectile{v=50;i=20;md=50;
+      onHit=triple_pierce-hit;
+      onTick=[- e:p{p=crit_magic;a=2}]
+    } @forward{f=2;uel=true}
+
+triple_pierce-hit:
+  TargetConditions:
+  - isliving true
+  Skills:
+  - damage{a=20}
+  - e:p{p=crit;a=8;y=1;hs=0.4}
+  - skill:pierce-hit @self
+```
+
+### Example: Piercing Fireball
+
+```yaml
+piercing_fireball:
+  Skills:
+  - skill:pierce-init{pierce=5} @self
+  - projectile{v=40;i=10;md=40;hR=0.8;vR=0.8;
+      onHit=piercing_fireball-hit;
+      onTick=[- e:p{p=flame;a=3}];
+      onEnd=[- explosion{yield=2}]
+    } @forward{f=2;uel=true}
+
+piercing_fireball-hit:
+  Skills:
+  - damage{a=25;i=FIRE}
+  - ignite{t=60}
+  - skill:pierce-hit @self
+```
+
+## Combining Systems
+
+You can combine spread patterns with piercing:
+
+```yaml
+piercing_spread:
+  Skills:
+  - skill:pierce-init{pierce=2} @self
+  - skill:projectile_spread{
+      points=7;
+      arc=90;
+      radius=10;
+      id=[
+        - projectile{v=60;i=20;md=40;
+            onHit=[
+              - damage{a=12}
+              - skill:pierce-hit @self
+            ];
+            onTick=[- e:p{p=end_rod;a=1}]
+          }
+      ]
+    } @SelfEyeLocation
+```
+
+<Note>
+  When using piercing with spread, initialize piercing on the caster, not per-projectile, since the pierce counter needs to be per-projectile.
+</Note>
+
+## Aliases
+
+### Projectile Spread
+- `spread`
+- `arrow_spread`
+- `projectile_spread`
+
+### Projectile Barrage
+- `projectile_barrage`
+
+## Tips
+
+<Tip>
+  **Spread Pattern**: Use smaller arc values (20-60°) for focused attacks, larger values (90-180°) for area coverage.
+</Tip>
+
+<Tip>
+  **Barrage Timing**: Adjust the `repeati` parameter to control the delay between projectiles (default is 3 ticks).
+</Tip>
+
+<Tip>
+  **Pierce Balance**: Keep pierce values low (1-5) to prevent overpowered attacks. Higher pierce counts should deal less damage per hit.
+</Tip>
+
+<Warning>
+  The projectile scatter system mentioned in the source is incomplete and should not be used in production.
+</Warning>

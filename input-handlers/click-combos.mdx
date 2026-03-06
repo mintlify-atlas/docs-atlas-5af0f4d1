@@ -1,0 +1,319 @@
+---
+title: 'Click Combos'
+description: 'Wynncraft-style click combination system for binding skills to input sequences'
+icon: 'hand-pointer'
+---
+
+## Overview
+
+The Click Combo system enables Wynncraft-style input sequences where players perform combinations of left-clicks, right-clicks, swaps, and drops to cast specific skills. Visual feedback shows the input progress.
+
+<Note>
+  This system is inspired by Wynncraft's spell casting mechanics and supports up to 3-input combinations.
+</Note>
+
+## Combo Types
+
+The system supports four different combo modes:
+
+<ParamField path="type" type="string" default="NORMAL">
+  The combo mode to use:
+  - `NORMAL` - Full 3-input combos with visual subtitle feedback
+  - `WYNN_WAND` - Wynncraft wand-style (starts with RIGHT click)
+  - `WYNN_WEAPON` - Wynncraft weapon-style (starts with LEFT click)
+  - `QUICK` - Fast 2-input combos starting with SWAP
+</ParamField>
+
+<ParamField path="duration" type="float" default="5">
+  Time in seconds before the combo input expires.
+</ParamField>
+
+## Input Types
+
+- **LEFT** (`l`) - Left click
+- **RIGHT** (`r`) - Right click
+- **SWAP** (`swap`) - F key
+- **DROP** (`drop`) - Q key
+
+## Basic Usage
+
+Create a skill that initiates a combo system:
+
+```yaml
+wynn-weapon-spells:
+  Skills:
+  - skill:click_combo{type=WYNN_WEAPON;duration=5;
+    lll=[
+      - message{m="Arrow Storm!"}
+      - projectile{...}
+    ];
+    rrr=[
+      - message{m="Escape!"}
+      - teleport{...}
+    ];
+    rlr=[
+      - message{m="Arrow Shield!"}
+      - aura{...}
+    ]} @self
+```
+
+## Combo Pattern Binding
+
+Bind skills to specific input sequences using concatenated input codes:
+
+### 3-Input Combos (NORMAL, WYNN modes)
+
+```yaml
+full-spell-set:
+  Skills:
+  - skill:click_combo{type=NORMAL;
+    lll=[ - vskill{s=spell-fireball} ];     # Left-Left-Left
+    rrr=[ - vskill{s=spell-heal} ];         # Right-Right-Right
+    lrl=[ - vskill{s=spell-teleport} ];     # Left-Right-Left
+    rlr=[ - vskill{s=spell-shield} ];       # Right-Left-Right
+    llr=[ - vskill{s=spell-dash} ];         # Left-Left-Right
+    rrl=[ - vskill{s=spell-meteor} ];       # Right-Right-Left
+    lrr=[ - vskill{s=spell-lightning} ];    # Left-Right-Right
+    rll=[ - vskill{s=spell-freeze} ]        # Right-Left-Left
+  } @self
+```
+
+### 2-Input Combos (QUICK mode)
+
+```yaml
+quick-abilities:
+  Skills:
+  - skill:click_combo{type=QUICK;
+    swapl=[ - vskill{s=ability-dodge} ];        # Swap-Left
+    swapr=[ - vskill{s=ability-parry} ];        # Swap-Right
+    swapswap=[ - vskill{s=ability-ultimate} ];  # Swap-Swap
+    swapdown=[ - vskill{s=ability-ground} ]     # Swap-Crouch (Quick mode only)
+  } @self
+```
+
+<Note>
+  QUICK mode supports an additional `+down` input if the player is crouching when the combo completes.
+</Note>
+
+## Wynncraft Examples
+
+### Archer/Warrior (WYNN_WEAPON)
+
+Starts with LEFT click, common for weapon-based classes:
+
+```yaml
+warrior-skills:
+  Skills:
+  - skill:click_combo{type=WYNN_WEAPON;
+    lll=[
+      - message{m="<green>Bash"}
+      - damage{a=20}
+      - throw{v=3}
+    ];
+    rrr=[
+      - message{m="<aqua>Charge"}
+      - velocity{m=forward;v=2}
+      - aura{name=charge;d=40}
+    ];
+    rlr=[
+      - message{m="<yellow>War Scream"}
+      - potion{t=STRENGTH;d=100;l=1}
+      - sound{s=entity.ender_dragon.growl}
+    ]} @self
+```
+
+### Mage (WYNN_WAND)
+
+Starts with RIGHT click, common for wand-based classes:
+
+```yaml
+mage-spells:
+  Skills:
+  - skill:click_combo{type=WYNN_WAND;
+    rrr=[
+      - message{m="<red>Meteor"}
+      - projectile{onTick=meteor-trail;onEnd=meteor-explode;...}
+    ];
+    lll=[
+      - message{m="<aqua>Heal"}
+      - heal{a=20}
+      - effect:particles{p=heart}
+    ];
+    rrl=[
+      - message{m="<light_purple>Teleport"}
+      - teleport{...}
+    ]} @self
+```
+
+## Visual Feedback
+
+The system provides automatic visual feedback:
+
+- **Subtitle Display**: Shows input progress as small text characters
+- **Sound Effects**: 
+  - Click sound (pitch increases with progress)
+  - Success sound (experience orb) on valid combo
+- **Color Coding**:
+  - White: Input in progress
+  - Green: Valid combo executed
+  - Red: Invalid combo or interrupted
+
+## Invalid Inputs
+
+When a combo doesn't match any bound pattern:
+
+```yaml
+click_combo-invalid:
+  Skills:
+  - message{m="Invalid Input!"} @self
+  - sendtitle{title="";subtitle="<#EE4B2B><caster.var.display_input>";d=10;delay=1}
+```
+
+<Warning>
+  Invalid combos show a red subtitle and do not execute any skill. Make sure to bind all common patterns players might attempt.
+</Warning>
+
+## Interruption Handling
+
+Combos are automatically cancelled if the player is stunned:
+
+```yaml
+MyItem:
+  Type: DIAMOND_SWORD
+  Skills:
+  - skill:click_combo{...} ~onSwing
+  Conditions:
+  - hasaura{name=stun} false
+```
+
+The system shows "Interrupted!" message when forcibly cancelled.
+
+## Best Practices
+
+### 1. Use Appropriate Modes
+
+- **WYNN_WEAPON**: For melee weapons, starts with LEFT
+- **WYNN_WAND**: For magical weapons, starts with RIGHT
+- **QUICK**: For fast utility abilities
+- **NORMAL**: For general purpose, full control
+
+### 2. Duration Tuning
+
+```yaml
+# Fast combat
+click_combo{type=WYNN_WEAPON;duration=3;...}  # Tight timing
+
+# Deliberate casting
+click_combo{type=WYNN_WAND;duration=8;...}    # Relaxed timing
+```
+
+### 3. Provide Feedback
+
+Always include clear feedback in your skills:
+
+```yaml
+rrr=[
+  - message{m="<gold>⚡ Lightning Strike"}
+  - sound{s=entity.lightning_bolt.thunder;v=0.5}
+  - effect:particles{...}
+  - damage{...}
+]
+```
+
+### 4. Add Cooldowns
+
+Prevent spam by adding cooldowns:
+
+```yaml
+MyWand:
+  Type: STICK
+  Skills:
+  - skill:click_combo{...} ~onSwing
+  Conditions:
+  - hasaura{aura=clickcombo-cd} false
+```
+
+## Internal Variables
+
+The system tracks state using caster variables:
+
+- `caster.input` - Raw input string (e.g., "lrl")
+- `caster.display_input` - Formatted display string
+- `caster.input_counter` - Number of inputs recorded
+- `caster.input_counter_max` - Maximum inputs for this mode (2 or 3)
+- `caster.input_key` - Most recent key press
+
+## Conflict Prevention
+
+<Warning>
+  Click combos are automatically disabled when:
+  - The `clickcombo-input` aura is already active
+  - The player has a `stun` aura
+  
+  This prevents overlapping input capture and conflicts with weapon movesets.
+</Warning>
+
+## Trigger Integration
+
+Common triggers for click combos:
+
+```yaml
+# On weapon swing
+MyWeapon:
+  Skills:
+  - skill:click_combo{...} ~onSwing
+
+# On item use
+MyWand:
+  Skills:
+  - skill:click_combo{...} ~onUse
+
+# On attack
+MyTool:
+  Skills:
+  - skill:click_combo{...} ~onAttack
+```
+
+## Complete Example
+
+Full Wynncraft-style mage class:
+
+```yaml
+WynnMageWand:
+  Type: BLAZE_ROD
+  Display: '<gradient:#4A00E0:#8E2DE2>Arcane Staff</gradient>'
+  Skills:
+  - skill:click_combo{type=WYNN_WAND;duration=6;
+    rrr=[
+      - message{m="<red>⚫ Meteor"}
+      - projectile{t=SMALL_FIREBALL;i=1;d=500;v=2;onTick=meteor-tick;onEnd=meteor-boom}
+    ];
+    lll=[
+      - message{m="<aqua>❤ Heal"}
+      - heal{a=20}
+      - sound{s=entity.player.levelup;v=0.5;p=2}
+      - effect:particles{p=heart;a=10;hs=0.5;vs=0.5;y=1}
+    ];
+    rrl=[
+      - message{m="<light_purple>➤ Teleport"}
+      - projectile{i=ENDER_PEARL;d=1;v=0;onEnd=teleport-location}
+    ];
+    llr=[
+      - message{m="<yellow>◎ Ice Snake"}
+      - summon{t=IceSnake;d=200}
+    ]} ~onSwing
+  Conditions:
+  - hasaura{aura=clickcombo-cd} false
+  - hasaura{name=stun} false
+```
+
+## Known Issues
+
+<Note>
+  **DROP Input**: Currently returns LEFT input instead of DROP. This is a known issue mentioned in the source code.
+</Note>
+
+## Related Systems
+
+- [Weapon Movesets](/input-handlers/weapon-movesets) - Alternative combat input system
+- [Spell Cycling](/input-handlers/spell-cycling) - Cycle through bound spells

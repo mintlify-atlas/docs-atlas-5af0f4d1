@@ -1,0 +1,708 @@
+---
+title: Custom Item Examples
+description: Create custom items that integrate seamlessly with the skill system, from base templates to complex spell-casting wands
+---
+
+# Custom Item Examples
+
+Custom items are the foundation of player interaction with your skill systems. These examples show how to create reusable item templates and practical implementations.
+
+## Item Templates
+
+Templates provide reusable configurations that can be extended by specific items.
+
+<Tabs>
+  <Tab title="Base Weapons">
+    ## Base Weapon Templates
+    
+    Foundation templates that define common weapon properties.
+    
+    ### Universal Weapon Template
+    
+    ```yaml
+    weapon:
+      Options:
+        PreventDropping: false
+        KeepOnDeath: false
+        Unbreakable: true
+        Placeable: false
+      Hide:
+        - UNBREAKABLE
+        - DYE
+    ```
+    
+    <Accordion title="Template Properties">
+      **Options:**
+      - `PreventDropping: false`: Players can drop the item
+      - `KeepOnDeath: false`: Item drops on death
+      - `Unbreakable: true`: Never breaks from use
+      - `Placeable: false`: Cannot be placed as block
+      
+      **Hide:**
+      - `UNBREAKABLE`: Hides the unbreakable tooltip
+      - `DYE`: Hides leather armor color info
+    </Accordion>
+    
+    ### Weapon Type Templates
+    
+    ```yaml
+    melee:
+      Template: weapon
+      Id: GOLDEN_SWORD
+    
+    bow:
+      Template: weapon
+      Id: BOW
+    
+    wand:
+      Template: weapon
+      Id: STICK
+    ```
+    
+    These inherit all properties from the `weapon` template and specify the base material.
+    
+    ### Using Templates
+    
+    ```yaml
+    fire_sword:
+      Template: melee
+      Display: "<#FF6B6B>Blazing Sword"
+      Lore:
+      - "&7Burns enemies on hit"
+      Skills:
+      - ignite{t=60} @Target ~onAttack
+    ```
+    
+    Inherits from `melee`, which inherits from `weapon`.
+  </Tab>
+  
+  <Tab title="Click Combo Base">
+    ## Click Combo Templates
+    
+    Templates for items that track player input sequences.
+    
+    ### Normal Click Combo
+    
+    Tracks right-clicks with a left-click buffer:
+    
+    ```yaml
+    click_combo-normal:
+      Template: weapon
+      Id: STICK
+      Display: "Normal Click Combo"
+      Lore: "RIGHT-CLICK to Cast spells."
+      Slot: HAND
+      Options:
+        PreventDropping: true
+      Skills:
+      - skill{s=[ 
+        - aura{name=clickcombo-left_cd;d=2;ow=true;bartimer=false} 
+        - skill{s=click_combo-sendinput;key=DROP} 
+        ]} @self ~onDropitem 
+      - skill{s=[ - skill{s=click_combo-sendinput;key=LEFT;delay=2} ]} @self ~onSwing ?!hasaura{aura=clickcombo-left_cd}
+      - skill{s=[ - skill{s=click_combo-sendinput;key=RIGHT} ]} @self ~onUse
+    
+      - CancelEvent{sync=true} @self ~onPressF
+      - skill{s=click_combo-sendinput;key=SWAP} @self ~onPressF
+      - skill{s=click_combo-force_end} @self ~onUnHeld
+    ```
+    
+    <Accordion title="Input Tracking">
+      **Drop Item:**
+      ```yaml
+      - skill{s=[ 
+        - aura{name=clickcombo-left_cd;d=2;ow=true;bartimer=false} 
+        - skill{s=click_combo-sendinput;key=DROP} 
+        ]} @self ~onDropitem
+      ```
+      Sends DROP input and applies cooldown aura.
+      
+      **Left Click:**
+      ```yaml
+      - skill{s=[ - skill{s=click_combo-sendinput;key=LEFT;delay=2} ]} 
+        @self ~onSwing ?!hasaura{aura=clickcombo-left_cd}
+      ```
+      Sends LEFT input after 2 tick delay if not on cooldown.
+      
+      **Right Click:**
+      ```yaml
+      - skill{s=[ - skill{s=click_combo-sendinput;key=RIGHT} ]} @self ~onUse
+      ```
+      Immediately sends RIGHT input.
+      
+      **Swap Key:**
+      ```yaml
+      - CancelEvent{sync=true} @self ~onPressF
+      - skill{s=click_combo-sendinput;key=SWAP} @self ~onPressF
+      ```
+      Cancels default swap behavior and sends custom SWAP input.
+    </Accordion>
+    
+    ### Quick Click Combo
+    
+    Optimized for fast input registration:
+    
+    ```yaml
+    click_combo-quick:
+      Template: weapon
+      Id: STICK
+      Display: "Quick Click Combo"
+      Lore: "SWAP to Quick-cast spells."
+      Slot: HAND
+      Options:
+        PreventDropping: true
+      Hide:
+        - UNBREAKABLE
+        - DYE
+      Skills:
+      - skill{s=[ 
+        - aura{name=clickcombo-left_cd;d=2;ma=true;bartimer=false} 
+        - skill{s=click_combo-sendinput;key=DROP} ]} 
+        @self ~onDropitem 
+      - CancelEvent{sync=true} @self ~onPressF
+      - skill{s=click_combo-sendinput;key=SWAP} @self ~onPressF
+      - skill{s=click_combo-force_end} @self ~onUnHeld
+      - skill{s=click_combo-sendinput;key=LEFT;delay=2} @self ~onSwing ?!hasaura{aura=clickcombo-left_cd}
+      - skill{s=click_combo-sendinput;key=RIGHT} @self ~onUse
+    ```
+    
+    Removes the delay on right-click for faster response.
+    
+    ### Wynn-Style Click Combo
+    
+    Wynncraft-inspired input system:
+    
+    ```yaml
+    click_combo-wynn:
+      Template: weapon
+      Id: STICK
+      Display: "Wynn Wand Click Combo"
+      Lore: "RIGHT-CLICK to Cast spells."
+      Slot: HAND
+      Options:
+        PreventDropping: true
+      Hide:
+        - UNBREAKABLE
+        - DYE
+      Skills:
+        - skill{s=[ - skill{s=click_combo-sendinput;key=LEFT;delay=0} ]} @self ~onSwing
+        - skill{s=[ - skill{s=click_combo-sendinput;key=RIGHT;delay=0} ]} @self ~onUse
+        - skill{s=click_combo-force_end} @self ~onUnHeld
+    ```
+    
+    Simplified system with immediate input registration.
+  </Tab>
+  
+  <Tab title="Cycle Wand">
+    ## Cycle Wand Template
+    
+    Template for wands that cycle through multiple spells.
+    
+    ```yaml
+    cyclewand:
+      Template: weapon
+      Id: STICK
+      Display: "Base Cycle Wand"
+      NBT:
+        activespell: int/1
+        maxspells: int/3
+      Skills:
+        - skill{s=spell-cycle-cast;branch=true} @self ~onSwing
+        - skill{s=spell-cycle-right;branch=true} @self ~onUse ?!isCrouching
+        - skill{s=spell-cycle-left;branch=true} @self ~onUse ?isCrouching
+    ```
+    
+    <Accordion title="NBT Data">
+      **NBT Structure:**
+      ```yaml
+      NBT:
+        activespell: int/1  # Currently selected spell (1-based)
+        maxspells: int/3    # Total number of spells
+      ```
+      
+      NBT data persists on the item and can be read/modified by skills.
+    </Accordion>
+    
+    <Accordion title="Cycle Skills">
+      **Cast Active Spell:**
+      ```yaml
+      - skill{s=spell-cycle-cast;branch=true} @self ~onSwing
+      ```
+      Casts the currently active spell.
+      
+      **Cycle Right:**
+      ```yaml
+      - skill{s=spell-cycle-right;branch=true} @self ~onUse ?!isCrouching
+      ```
+      Right-click while standing cycles to next spell.
+      
+      **Cycle Left:**
+      ```yaml
+      - skill{s=spell-cycle-left;branch=true} @self ~onUse ?isCrouching
+      ```
+      Right-click while crouching cycles to previous spell.
+    </Accordion>
+    
+    ### Implementation Example
+    
+    ```yaml
+    elemental_wand:
+      Template: cyclewand
+      Display: "<#4ECDC4>Elemental Wand"
+      NBT:
+        activespell: int/1
+        maxspells: int/4
+        spell_1: "fireball-cast"
+        spell_2: "ice_shard-cast"
+        spell_3: "lightning_bolt-cast"
+        spell_4: "wind_burst-cast"
+      Lore:
+      - "<#C0C0C0>Active: <white><caster.item.nbt.spell_<caster.item.nbt.activespell>>"
+      - "<gray>Crouch + Right Click to cycle"
+    ```
+  </Tab>
+  
+  <Tab title="NBT Wand">
+    ## NBT-Driven Click Combo Wand
+    
+    Advanced wand that stores spell configurations in NBT data.
+    
+    ```yaml
+    nbt_wand-quick:
+      Id: STICK
+      Template: click_combo-quick
+      Display: "NBT Driven Click Combo Wand"
+      UseCooldown:
+        CooldownGroup: wand
+        CooldownSeconds: 1
+      NBT:
+        spells:
+          LMB:
+            name:
+            meta: 
+          RMB:
+            name:
+            meta:
+          DROP:
+            name:
+            meta: 
+          SWAPL:
+            name:
+            meta: 
+          SWAPR:
+            name:
+            meta: 
+          SWAPDROP: 
+            name:
+            meta: 
+          SWAPSWAP:
+            name:
+            meta: 
+      Lore:
+        - "<#C0C0C0>Spells:"
+        - "&r&8» <#C0C0C0>[<#00BCFF>LMB<#C0C0C0>] <white><caster.item.nbt.spells.LMB.name|<dark_gray>Unset>"
+        - "&r&8» <#C0C0C0>[<#00BCFF>RMB<#C0C0C0>] <white><caster.item.nbt.spells.RMB.name|<dark_gray>Unset>"
+        - "&r&8» <#C0C0C0>[<#00BCFF>DROP<#C0C0C0>] <white><caster.item.nbt.spells.DROP.name|<dark_gray>Unset>"
+        - ""
+        - "<#C0C0C0>Click Combos:"
+        - "&r&8» <#C0C0C0>[<#00BCFF>SWAP+LEFT<#C0C0C0>] <white><caster.item.nbt.spells.SWAPL.name>"
+        - "&r&8» <#C0C0C0>[<#00BCFF>SWAP+RIGHT<#C0C0C0>] <white><caster.item.nbt.spells.SWAPR.name>"
+        - "&r&8» <#C0C0C0>[<#00BCFF>SWAP+DROP<#C0C0C0>] <white><caster.item.nbt.spells.SWAPDROP.name>"
+        - "&r&8» <#C0C0C0>[<#00BCFF>SWAP+SWAP<#C0C0C0>] <white><caster.item.nbt.spells.SWAPSWAP.name>"
+      Skills:
+        - vskill{s=<caster.item.hand.nbt.spells.LMB.meta>;delay=0} @self ~onSwing ?!hasaura{aura=clickcombo-input} ?!hasaura{aura=clickcombo-left_cd}
+        - vskill{s=<caster.item.hand.nbt.spells.RMB.meta>} @self ~onUse ?!hasaura{aura=clickcombo-input}
+        - vskill{s=<caster.item.hand.nbt.spells.DROP.meta>} @self ~onPressQ ?!hasaura{aura=clickcombo-input}
+        - updatelore{s=HAND} @self ~onHold 
+    
+        - skill:click_combo{type=QUICK; 
+          SWAPL=[ - vskill{s=<caster.item.hand.nbt.spells.SWAPL.meta>} ]; 
+          SWAPR=[ - vskill{s=<caster.item.hand.nbt.spells.SWAPR.meta>} ]; 
+          SWAPDROP=[ - vskill{s=<caster.item.hand.nbt.spells.SWAPDROP.meta>} ]; 
+          SWAPSWAP=[ - vskill{s=<caster.item.hand.nbt.spells.SWAPSWAP.meta>} ]} @self ~onPressF
+    ```
+    
+    <Accordion title="NBT Structure">
+      The NBT data stores spell names and execution metadata:
+      
+      ```yaml
+      spells:
+        LMB:
+          name: "Fireball"      # Display name
+          meta: "fireball-cast" # Skill to execute
+      ```
+      
+      This allows dynamic spell assignment without redefining the item.
+    </Accordion>
+    
+    <Accordion title="Dynamic Lore">
+      The lore reads from NBT with fallbacks:
+      
+      ```yaml
+      - "<white><caster.item.nbt.spells.LMB.name|<dark_gray>Unset>"
+      ```
+      
+      Shows spell name if set, otherwise shows "Unset" in dark gray.
+      
+      Updates automatically with `updatelore` skill:
+      ```yaml
+      - updatelore{s=HAND} @self ~onHold
+      ```
+    </Accordion>
+    
+    <Accordion title="Skill Execution">
+      Skills read the meta field to execute the correct spell:
+      
+      ```yaml
+      - vskill{s=<caster.item.hand.nbt.spells.LMB.meta>;delay=0} 
+        @self ~onSwing 
+        ?!hasaura{aura=clickcombo-input} 
+        ?!hasaura{aura=clickcombo-left_cd}
+      ```
+      
+      - `vskill`: Variable skill execution
+      - `s=<caster.item.hand.nbt.spells.LMB.meta>`: Reads skill name from NBT
+      - Conditions prevent execution during combo input or cooldown
+    </Accordion>
+  </Tab>
+</Tabs>
+
+## Practical Implementations
+
+<Tabs>
+  <Tab title="Apprentice Wand">
+    ## Apprentice Wand
+    
+    A practical implementation using the quick click combo template.
+    
+    ```yaml
+    apprentice_wand:
+      Id: BLAZE_ROD
+      Template: click_combo-quick
+      Display: 'Apprentice Wand'
+      Lore: "Quick Varient"
+      Skills:
+      - skill{s=frost_shard-cast;delay=1} @self ~onSwing ?!hasaura{aura=clickcombo-input}
+      - skill{s=click_combo;type=QUICK;
+        duration=10;debug=false;
+        SWAPL=burning_blast-cast;
+        SWAPR=flame_flicker-cast;
+        SWAPDROP=spark_jolt-cast;
+        SWAPSWAP=glacial_spikes-cast;
+        SWAPL+DOWN=void_lance-cast;
+        SWAPR+DOWN=[];
+        SWAPDROP+DOWN=[];
+        SWAPSWAP+DOWN=[]} @self ~onPressF
+    ```
+    
+    <Accordion title="Spell Mapping">
+      **Basic Attack:**
+      ```yaml
+      - skill{s=frost_shard-cast;delay=1} @self ~onSwing ?!hasaura{aura=clickcombo-input}
+      ```
+      Left-click casts `frost_shard-cast` when not in combo mode.
+      
+      **Combo Spells:**
+      ```yaml
+      - skill{s=click_combo;type=QUICK;
+        duration=10;debug=false;
+        SWAPL=burning_blast-cast;
+        SWAPR=flame_flicker-cast;
+        SWAPDROP=spark_jolt-cast;
+        SWAPSWAP=glacial_spikes-cast;
+        SWAPL+DOWN=void_lance-cast;
+        SWAPR+DOWN=[];
+        SWAPDROP+DOWN=[];
+        SWAPSWAP+DOWN=[]} @self ~onPressF
+      ```
+      
+      - `duration=10`: 10 seconds to complete combo
+      - `SWAPL`: Swap + Left Click
+      - `SWAPR`: Swap + Right Click  
+      - `SWAPDROP`: Swap + Drop (Q)
+      - `SWAPSWAP`: Swap + Swap (double F)
+      - `SWAPL+DOWN`: Swap + Left while crouching
+    </Accordion>
+    
+    ### How to Use
+    
+    1. **Basic Attack**: Left-click to cast Frost Shard
+    2. **Combo Attack**: Press F, then:
+       - Left-click for Burning Blast
+       - Right-click for Flame Flicker
+       - Drop (Q) for Spark Jolt
+       - F again for Glacial Spikes
+       - Crouch + Left for Void Lance
+  </Tab>
+  
+  <Tab title="Base Icon">
+    ## Base Icon Item
+    
+    Template for non-functional display items.
+    
+    ```yaml
+    base_icon:
+      Display: "Unset Icon"
+      Id: creeper_banner_pattern
+      Model: 1
+      Options:
+       PreventAnvil: true
+       PreventEnchanting: true
+       Unbreakable: true
+      Hide:
+      - UNBREAKABLE
+      - DYE
+    ```
+    
+    <Accordion title="Use Cases">
+      **GUI Elements:**
+      ```yaml
+      menu_button:
+        Template: base_icon
+        Display: "<#FF6B6B>Confirm"
+        Id: lime_dye
+        Model: 10
+      ```
+      
+      **Quest Items:**
+      ```yaml
+      ancient_key:
+        Template: base_icon
+        Display: "<gold>Ancient Key"
+        Id: tripwire_hook
+        Model: 5
+        Lore:
+        - "<gray>A mysterious key..."
+      ```
+      
+      **Currency:**
+      ```yaml
+      gold_coin:
+        Template: base_icon
+        Display: "<gold>Gold Coin"
+        Id: sunflower
+        Model: 2
+      ```
+    </Accordion>
+  </Tab>
+</Tabs>
+
+## Item System Integration
+
+### Template Inheritance
+
+Items can inherit from multiple levels:
+
+```yaml
+# Level 1: Base
+weapon:
+  Options:
+    Unbreakable: true
+
+# Level 2: Type
+melee:
+  Template: weapon
+  Id: GOLDEN_SWORD
+
+# Level 3: Specific
+flame_sword:
+  Template: melee
+  Display: "Flame Sword"
+  Skills:
+  - ignite{t=60} @Target ~onAttack
+```
+
+### NBT Data Management
+
+NBT data can store persistent information:
+
+```yaml
+Custom Item:
+  NBT:
+    # Integers
+    level: int/1
+    experience: int/0
+    
+    # Floats
+    damage_multiplier: float/1.5
+    
+    # Strings
+    owner: "PlayerName"
+    
+    # Nested structures
+    stats:
+      strength: int/10
+      agility: int/8
+```
+
+Access in skills:
+```yaml
+- damage{a="<caster.item.hand.nbt.stats.strength>*2"}
+```
+
+### Item Triggers
+
+Common trigger events:
+
+```yaml
+Skills:
+  - skill{} @self ~onAttack        # When attacking entity
+  - skill{} @self ~onHit           # When hit by entity  
+  - skill{} @self ~onSwing         # When left-clicking
+  - skill{} @self ~onUse           # When right-clicking
+  - skill{} @self ~onBowHit        # When arrow hits
+  - skill{} @self ~onHold          # While holding item
+  - skill{} @self ~onUnHeld        # When switching away
+  - skill{} @self ~onDropitem      # When dropping
+  - skill{} @self ~onPressF        # When pressing F
+  - skill{} @self ~onPressQ        # When pressing Q
+```
+
+## Source Files
+
+<CodeGroup>
+```yaml base-weapons.yml
+weapon:
+  Options:
+    PreventDropping: false
+    KeepOnDeath: false
+    Unbreakable: true
+    Placeable: false
+  Hide:
+    - UNBREAKABLE
+    - DYE
+
+melee:
+  Template: weapon
+  Id: GOLDEN_SWORD
+
+bow:
+  Template: weapon
+  Id: BOW
+
+wand:
+  Template: weapon
+  Id: STICK
+
+cyclewand:
+  Template: weapon
+  Id: STICK
+  Display: "Base Cycle Wand"
+  NBT:
+    activespell: int/1
+    maxspells: int/3
+  Skills:
+    - skill{s=spell-cycle-cast;branch=true} @self ~onSwing
+    - skill{s=spell-cycle-right;branch=true} @self ~onUse ?!isCrouching
+    - skill{s=spell-cycle-left;branch=true} @self ~onUse ?isCrouching
+
+click_combo-normal:
+  Template: weapon
+  Id: STICK
+  Display: "Normal Click Combo"
+  Lore: "RIGHT-CLICK to Cast spells."
+  Slot: HAND
+  Options:
+    PreventDropping: true
+  Skills:
+  - skill{s=[ 
+    - aura{name=clickcombo-left_cd;d=2;ow=true;bartimer=false} 
+    - skill{s=click_combo-sendinput;key=DROP} 
+    ]} @self ~onDropitem 
+  - skill{s=[ - skill{s=click_combo-sendinput;key=LEFT;delay=2} ]} @self ~onSwing ?!hasaura{aura=clickcombo-left_cd}
+  - skill{s=[ - skill{s=click_combo-sendinput;key=RIGHT} ]} @self ~onUse
+
+  - CancelEvent{sync=true} @self ~onPressF
+  - skill{s=click_combo-sendinput;key=SWAP} @self ~onPressF
+  - skill{s=click_combo-force_end} @self ~onUnHeld
+
+click_combo-quick:
+  Template: weapon
+  Id: STICK
+  Display: "Quick Click Combo"
+  Lore: "SWAP to Quick-cast spells."
+  Slot: HAND
+  Options:
+    PreventDropping: true
+  Hide:
+    - UNBREAKABLE
+    - DYE
+  Skills:
+  - skill{s=[ 
+    - aura{name=clickcombo-left_cd;d=2;ma=true;bartimer=false} 
+    - skill{s=click_combo-sendinput;key=DROP} ]} 
+    @self ~onDropitem 
+  - CancelEvent{sync=true} @self ~onPressF
+  - skill{s=click_combo-sendinput;key=SWAP} @self ~onPressF
+  - skill{s=click_combo-force_end} @self ~onUnHeld
+  - skill{s=click_combo-sendinput;key=LEFT;delay=2} @self ~onSwing ?!hasaura{aura=clickcombo-left_cd}
+  - skill{s=click_combo-sendinput;key=RIGHT} @self ~onUse
+
+click_combo-wynn:
+  Template: weapon
+  Id: STICK
+  Display: "Wynn Wand Click Combo"
+  Lore: "RIGHT-CLICK to Cast spells."
+  Slot: HAND
+  Options:
+    PreventDropping: true
+  Hide:
+    - UNBREAKABLE
+    - DYE
+  Skills:
+    - skill{s=[ - skill{s=click_combo-sendinput;key=LEFT;delay=0} ]} @self ~onSwing
+    - skill{s=[ - skill{s=click_combo-sendinput;key=RIGHT;delay=0} ]} @self ~onUse
+    - skill{s=click_combo-force_end} @self ~onUnHeld
+```
+
+```yaml demo_click_combo.yml
+apprentice_wand:
+  Id: BLAZE_ROD
+  Template: click_combo-quick
+  Display: 'Apprentice Wand'
+  Lore: "Quick Varient"
+  Skills:
+  - skill{s=frost_shard-cast;delay=1} @self ~onSwing ?!hasaura{aura=clickcombo-input}
+  - skill{s=click_combo;type=QUICK;
+    duration=10;debug=false;
+    SWAPL=burning_blast-cast;
+    SWAPR=flame_flicker-cast;
+    SWAPDROP=spark_jolt-cast;
+    SWAPSWAP=glacial_spikes-cast;
+    SWAPL+DOWN=void_lance-cast;
+    SWAPR+DOWN=[];
+    SWAPDROP+DOWN=[];
+    SWAPSWAP+DOWN=[]} @self ~onPressF
+```
+
+```yaml base_icon-items.yml
+base_icon:
+  Display: "Unset Icon"
+  Id: creeper_banner_pattern
+  Model: 1
+  Options:
+   PreventAnvil: true
+   PreventEnchanting: true
+   Unbreakable: true
+  Hide:
+  - UNBREAKABLE
+  - DYE
+```
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Demo Spells" icon="sparkles" href="/examples/demo-spells">
+    Create spells to use with your items
+  </Card>
+  <Card title="Weapon Combos" icon="swords" href="/examples/weapon-combos">
+    Add combo systems to weapons
+  </Card>
+  <Card title="Items API Reference" icon="book" href="/api/items">
+    Deep dive into item configuration
+  </Card>
+  <Card title="Spell Cycling" icon="database" href="/input-handlers/spell-cycling">
+    Master NBT data management with spell cycling
+  </Card>
+</CardGroup>

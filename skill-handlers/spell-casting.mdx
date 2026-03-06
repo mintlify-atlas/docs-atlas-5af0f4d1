@@ -1,0 +1,337 @@
+---
+title: 'Spell Casting Handler'
+description: 'Core spell system with cooldowns, charges, warmup, channeling, and casting mechanics'
+---
+
+The spell casting handler is the **core system** for creating abilities in IonTech's Modular Systems. It provides a complete framework for spell management including cooldowns, charges, warmup/channeling, casting VFX, and interrupt handling.
+
+## Overview
+
+The spell handler manages the complete lifecycle of a spell:
+
+1. **Initialization** - Set up spell parameters and stat mapping
+2. **Evaluation** - Check if spell can be cast (cooldowns, charges, stun status)
+3. **Execution** - Process modifiers and trigger spell logic
+4. **Channeling** (Optional) - Warmup period before casting
+5. **Casting** - Execute the actual spell effect
+6. **Cooldown** - Manage cooldown and charge regeneration
+
+## Basic Usage
+
+```yaml
+my_spell-cast:
+  Skills:
+  - skill:Spell{id=my_spell;name=My Spell;type=ABILITY;
+    spellcd=5;damage=10} @self
+
+my_spell:
+  Skills:
+  - damage{a=<skill.var.damage>} @target
+  - sound{s=entity.generic.explode}
+```
+
+## Core Parameters
+
+<ParamField path="id" type="string" required>
+  The unique identifier for this spell. Used for cooldown tracking and charge management.
+  
+  ```yaml
+  id=frost_shard
+  ```
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  Display name shown in cooldown messages and boss bars.
+  
+  ```yaml
+  name=Frost Shard
+  ```
+</ParamField>
+
+<ParamField path="type" type="string" default="Unknown">
+  Spell category or damage type. Can be a list of types separated by commas.
+  
+  ```yaml
+  type=ABILITY,ICE
+  ```
+</ParamField>
+
+<ParamField path="spellcd" type="float" default="1">
+  Cooldown duration in seconds before the spell can be cast again.
+  
+  ```yaml
+  spellcd=3  # 3 second cooldown
+  ```
+</ParamField>
+
+<ParamField path="damage" type="float">
+  Base damage value for the spell. Scales with spell_power and can be modified by critical hits.
+  
+  ```yaml
+  damage=10
+  ```
+</ParamField>
+
+<ParamField path="displaycd" type="boolean" default="true">
+  Whether to show cooldown messages to the player.
+  
+  ```yaml
+  displaycd=false  # Hide cooldown messages
+  ```
+</ParamField>
+
+## Warmup & Channeling
+
+<ParamField path="warmup" type="float" default="0">
+  Casting time in seconds before the spell executes. During warmup, the player channels the spell.
+  
+  ```yaml
+  warmup=0.6  # 0.6 second cast time
+  ```
+</ParamField>
+
+<ParamField path="interrupt" type="float" default="1">
+  Damage threshold for interrupting the cast. If the caster takes damage above this value during warmup, the cast is interrupted.
+  
+  ```yaml
+  interrupt=5  # Interrupted if taking 5+ damage
+  ```
+</ParamField>
+
+<ParamField path="onChannelStart" type="metaskill" default="channel-start_fx">
+  Metaskill executed when channeling begins.
+  
+  ```yaml
+  onChannelStart=burning_blast-exec
+  ```
+</ParamField>
+
+<ParamField path="onChannelTick" type="metaskill" default="channel-tick_fx">
+  Metaskill executed every tick during channeling. Great for visual effects and casting animations.
+  
+  ```yaml
+  onChannelTick=[
+    - vskill{s=channel-tick_fx}
+    - potion{t=SLOWNESS;l=2;duration=4}
+  ]
+  ```
+</ParamField>
+
+<ParamField path="onCast" type="metaskill" default="channel-cast_fx">
+  Metaskill executed when the spell completes casting (after warmup).
+  
+  ```yaml
+  onCast=[ - sound{s=entity.generic.explode} ]
+  ```
+</ParamField>
+
+### Channeling VFX
+
+The default `channel-tick_fx` creates a spinning triangle particle effect:
+
+```yaml spell_cast-defaults.yml:64
+channel-tick_fx:
+  Skills:
+  - setvar{var=pitch;val="<skill.var.pitch|0>+12"} 
+  - setvar{var=yaw;val="<skill.var.yaw|0>+12"}
+  - setvar{var=radius;val="(1-<skill.var.channel_progress|0>)*2+2";type=FLOAT}
+  - e:p{p=enchantment_table;a="1+2*(1-<skill.var.channel_progress|0>)";speed=4;hs=0.3;ys=0.6;y=2} 
+  - polygon{points=3;scale=<skill.var.radius>;db=0.5;mpd=false;
+    pitch="<skill.var.pitch>";yaw="<skill.var.yaw>";
+      oe=[ 
+      - e:p{p=SOUL_FIRE_FLAME;fo=true;origin=@targetedlocation;directional=true;a=1;speed=0.2} @selflocation{yo=1}
+      ]} @selflocation{yo=1}
+```
+
+## Interrupt Handling
+
+<ParamField path="onInterrupt" type="metaskill" default="[]">
+  Metaskill executed when channeling is interrupted (either manually or by damage).
+  
+  ```yaml
+  onInterrupt=[ - message{m="Cast interrupted!"} ]
+  ```
+</ParamField>
+
+<ParamField path="onForceInterrupt" type="metaskill" default="channel-force_interrupt-default">
+  Metaskill executed when the cast is interrupted by taking damage above the interrupt threshold.
+  
+  ```yaml
+  onForceInterrupt=[ - skill:spell-cooldown ]
+  ```
+</ParamField>
+
+<ParamField path="onManualInterrupt" type="metaskill" default="[]">
+  Metaskill executed when the player manually cancels the cast.
+  
+  ```yaml
+  onManualInterrupt=[ - sound{s=block.fire.extinguish} ]
+  ```
+</ParamField>
+
+## Charge System
+
+<ParamField path="charges" type="integer" default="0">
+  Maximum number of charges. When charges > 0, the spell uses a charge system instead of simple cooldowns.
+  
+  ```yaml
+  charges=8  # Spell can be cast 8 times before recharging
+  ```
+</ParamField>
+
+<ParamField path="chargecd" type="float" default="3">
+  Time in seconds to regenerate one charge.
+  
+  ```yaml
+  chargecd=2  # Each charge takes 2 seconds to regenerate
+  ```
+</ParamField>
+
+<ParamField path="chargedelay" type="float" default="0">
+  Delay in seconds before charges start regenerating after the last cast.
+  
+  ```yaml
+  chargedelay=0.75  # Wait 0.75s before charges start regenerating
+  ```
+</ParamField>
+
+<ParamField path="charge_regen" type="integer" default="1">
+  Number of charges regenerated per charge cooldown tick.
+  
+  ```yaml
+  charge_regen=2  # Regenerate 2 charges at once
+  ```
+</ParamField>
+
+## Cooldown Callbacks
+
+<ParamField path="onCooldownCast" type="metaskill" default="[]">
+  Metaskill executed when attempting to cast while on cooldown.
+  
+  ```yaml
+  onCooldownCast=[ - message{m="Still on cooldown!"} ]
+  ```
+</ParamField>
+
+<ParamField path="onCooldownEnd" type="metaskill" default="[]">
+  Metaskill executed when the spell comes off cooldown.
+  
+  ```yaml
+  onCooldownEnd=[ - sound{s=entity.experience_orb.pickup} ]
+  ```
+</ParamField>
+
+## Stat Mapping
+
+<ParamField path="statMapSkill" type="metaskill" default="stat_map-default">
+  Metaskill that maps spell stats and parameters. The default stat map handles damage, critical chance, cooldowns, and more.
+  
+  ```yaml
+  statMapSkill=custom_stat_map
+  ```
+</ParamField>
+
+The default stat map (`stat_map-default`) sets up these variables:
+
+- `spell_power` - Damage multiplier (default: 1)
+- `damage` - Base damage value
+- `critical_chance` - Crit chance (default: 0.01 = 1%)
+- `critical_damage` - Crit damage bonus (default: 0 = +50%)
+- `warmup` - Cast time in ticks
+- `spell_cooldown` - Cooldown in ticks
+- `charge_cooldown` - Charge regen time in ticks
+- `velocity` - Projectile velocity (default: 48)
+- `spread` - Projectile spread (default: 0)
+- `range` - Max range (default: 32)
+- `radius` - AoE radius (default: 0)
+
+## Example: Frost Shard
+
+A rapid-fire spell with charges that fires ice shards:
+
+```yaml frost_shard-spell.yml:3
+frost_shard-cast:
+  Skills:
+  - skill:Spell{id=[ - vskill{s=frost_shard-exec;branch=true} ];name=Frost Shard;type=ABILITY,ICE;
+    spellcd=0;charges=8;chargecd=2;chargedelay=0.75}
+    
+frost_shard-exec:
+  Skills:
+  - skill:projectile_barrage{id=frost_shard-fire;origin=@forward{uel=true;f=1;yo=-1.2};points=2;spread=<random.1to20>;radius=0.4} @forward{yo=-0.4;f=12;uel=true}
+  - delay 1
+  - skill:frost_shard-cast  # Cast again to use next charge
+
+frost_shard-fire:
+  Skills:
+  - skill:setRandomID
+  - projectile{velocity=48;maxrange=32;onHit=frost_shard-hit_entity}
+
+frost_shard-hit_entity:
+  Skills:
+  - skill:damage-ability{immune=10;
+    damageMod=[ - variableMath{var=damage;equation="x*0.25"} ];
+    onHit=[ - freeze{t=20} ]}
+```
+
+## Example: Burning Blast
+
+A spell with warmup/channeling that fires after charging:
+
+```yaml burning_blast-spell.yml:2
+burning_blast-cast:
+  Skills:
+  - skill:Spell{id=burning_blast;name=Burning Blast;type=ABILITY;
+    spellcd=3;warmup=0.6;
+    onChannelStart=burning_blast-exec;
+    onChannelTick=[ 
+      - vskill{s=channel-tick_fx} 
+      - potion{t=SLOWNESS;l=2;duration=4;a=false;i=false;p=false}
+      ]} @self
+
+burning_blast-exec:
+  Skills:
+  - projectile{velocity=0.1;onStart=burning_blast-start;onHit=burning_blast-hit_entity}
+
+burning_blast-start:
+  Skills:
+  - wait{c=[ - hasaura{aura=<skill.var.id>-channel} false ]}  # Wait for channel to finish
+  - delay 1
+  - modifyprojectile{t=VELOCITY;a=SET;v=12}  # Launch!
+```
+
+## Advanced Features
+
+### Critical Hits
+
+Spells automatically calculate critical hits based on `critical_chance` and `critical_damage`:
+
+```yaml spell_handler.yml:58
+spell-critical:
+  Skills:
+  - return ?!chance{c=<skill.var.critical_chance>}
+  - setvar{var=critical;val=true;type=STRING}
+  - variablemath{var=damage;equation=x*(1+<skill.var.critical_damage>)}
+```
+
+### Modifier Integration
+
+The spell handler integrates with the [modifier system](/skill-handlers/modifier-handler) at key points:
+
+- `PRE_CAST` - Before spell execution
+- `CAST` - After spell cast
+- `COOLDOWN_END` - When cooldown expires
+- `COOLDOWN_RESET` - When cooldown is manually reset
+
+### Cast Fatigue
+
+The system includes a brief "cast fatigue" to prevent accidental double-casting:
+
+```yaml spell_handler.yml:160
+- setvar{var=caster.cast_fatigue;val=1;e=5} @self
+```
+
+## Related Systems
+
+- [Modifier Handler](/skill-handlers/modifier-handler) - Add buffs/debuffs that modify spell behavior
+- [Damage Core](/skill-handlers/damage-core) - Handle spell damage calculations
+- [Knockback Core](/skill-handlers/knockback-core) - Add knockback to spell hits

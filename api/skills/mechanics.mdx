@@ -1,0 +1,408 @@
+---
+title: Skill Mechanics API
+description: API reference for skill mechanics in IonTech's Modular Systems
+---
+
+Skill mechanics provide reusable gameplay systems like projectiles, healing, slashing, and status effects.
+
+## Advanced Slash
+
+Advanced slash mechanic with visual effects and customizable hitboxes.
+
+### Advanced_Slash
+
+<ParamField path="arc" type="number" default="180">
+  Arc angle in degrees (0-360)
+</ParamField>
+
+<ParamField path="duration" type="number" default="0">
+  Animation duration in ticks
+</ParamField>
+
+<ParamField path="radius" type="number" default="3">
+  Slash radius
+</ParamField>
+
+<ParamField path="width" type="number" default="1">
+  Slash width/thickness
+</ParamField>
+
+<ParamField path="basewidth" type="number" default="0.1">
+  Starting width at base
+</ParamField>
+
+<ParamField path="points" type="integer" default="32">
+  Total points for calculation
+</ParamField>
+
+<ParamField path="vfx_points" type="integer">
+  Points for visual effects (defaults to points)
+</ParamField>
+
+<ParamField path="hitbox_points" type="integer">
+  Points for hitbox detection (defaults to points)
+</ParamField>
+
+<ParamField path="yaw" type="number" default="0">
+  Yaw rotation offset
+</ParamField>
+
+<ParamField path="pitch" type="number" default="0">
+  Pitch rotation offset
+</ParamField>
+
+<ParamField path="roll" type="number" default="0">
+  Roll rotation offset
+</ParamField>
+
+<ParamField path="twoside" type="boolean" default="true">
+  Randomize roll for double-sided slash
+</ParamField>
+
+<ParamField path="instant" type="boolean" default="false">
+  Instant hitbox or animated
+</ParamField>
+
+<ParamField path="show_vfx" type="boolean" default="true">
+  Display visual effects
+</ParamField>
+
+<ParamField path="hitboxsize" type="number" default="0.2">
+  Hitbox detection radius
+</ParamField>
+
+<ParamField path="onHit" type="metaskill" default="[]">
+  Skill executed on entity hit
+</ParamField>
+
+<ParamField path="vfx" type="metaskill" default="advanced_slash-default_vfx">
+  Custom VFX skill
+</ParamField>
+
+### Example
+
+```yaml
+fiery_slash:
+  Skills:
+  - skill:Advanced_Slash{
+      origin=@SelfEyeLocation{yo=-0.25};
+      arc=120;
+      duration=8;
+      twoside=false;
+      roll=0;
+      instant=true;
+      vfx_points=24;
+      hitbox_points=12;
+      radius=5;
+      width=1;
+      onHit=[
+        - vskill{s=damage-ability;immune=20}
+        - e:p{p=flame;a=12}
+      ]
+    } @forward{f=12;uel=true;yo=-0.25}
+```
+
+## Heal Mechanic
+
+Over-time healing with interrupt system.
+
+### heal
+
+<ParamField path="heal" type="number" default="5">
+  Total healing amount over duration
+</ParamField>
+
+<ParamField path="duration" type="number" default="1">
+  Healing duration in seconds
+</ParamField>
+
+<ParamField path="interval" type="integer" default="1">
+  Ticks between heal applications
+</ParamField>
+
+<ParamField path="max_damage" type="number" default="2">
+  Maximum damage before interrupt
+</ParamField>
+
+### Mechanics
+
+- Heals over time using onDamaged aura
+- Shows boss bar with heal rate
+- Displays green particles each tick
+- Interrupts if accumulated damage exceeds max_damage
+- Ignores suffocation, starvation, fire_tick, hot_floor, poison, wither
+
+### Example
+
+```yaml
+regen_potion:
+  Skills:
+  - skill:heal{heal=20;duration=5;interval=2;max_damage=5} @self
+```
+
+## Projectile Systems
+
+### projectile_spread
+
+Fires projectiles in a spread pattern.
+
+<ParamField path="points" type="integer" default="3">
+  Number of projectiles
+</ParamField>
+
+<ParamField path="arc" type="number">
+  Spread arc (defaults to points * 8)
+</ParamField>
+
+<ParamField path="duration" type="number" default="0">
+  Animation duration
+</ParamField>
+
+<ParamField path="radius" type="number" default="6">
+  Spread radius
+</ParamField>
+
+<ParamField path="yaw" type="number" default="0">
+  Yaw offset
+</ParamField>
+
+<ParamField path="pitch" type="number" default="0">
+  Pitch offset
+</ParamField>
+
+<ParamField path="roll" type="number" default="0">
+  Roll offset
+</ParamField>
+
+<ParamField path="twoside" type="boolean" default="true">
+  Randomize roll
+</ParamField>
+
+<ParamField path="id" type="metaskill" required>
+  Projectile skill to execute at each point
+</ParamField>
+
+### projectile_barrage
+
+Fires projectiles in alternating left-right pattern.
+
+<ParamField path="points" type="integer" default="3">
+  Number of projectiles
+</ParamField>
+
+<ParamField path="spread" type="number">
+  Spread distance (defaults to points * 2)
+</ParamField>
+
+<ParamField path="accuracy" type="number" default="1">
+  Accuracy (1.0 = perfect, less than 1.0 = deviation)
+</ParamField>
+
+<ParamField path="radius" type="number" default="1">
+  Barrage radius
+</ParamField>
+
+<ParamField path="id" type="metaskill" required>
+  Projectile skill to execute
+</ParamField>
+
+### Pierce System
+
+Controls projectile piercing.
+
+**pierce-init**
+
+<ParamField path="pierce" type="integer" default="1">
+  Number of entities to pierce through
+</ParamField>
+
+**pierce-hit**
+
+Call this on projectile hit to track pierce count.
+
+```yaml
+my_projectile:
+  Skills:
+  - skill{s=pierce-init;pierce=3} @self
+  - projectile{
+      onHit=[
+        - skill{s=pierce-hit}
+        - damage{a=10}
+      ]
+    }
+```
+
+## Stun Mechanic
+
+Stuns entities with visual feedback.
+
+### Stun
+
+<ParamField path="duration" type="number" required>
+  Stun duration in seconds
+</ParamField>
+
+<ParamField path="level" type="integer" default="3">
+  Slowness level during stun
+</ParamField>
+
+### Effects
+
+- Applies orbital particles (stars)
+- Shows boss bar with countdown
+- Applies slowness potion
+- Prevents actions during stun
+- Action bar message on attempt to act
+
+### Example
+
+```yaml
+stun_attack:
+  Skills:
+  - skill:Stun{duration=5;level=5} @target
+  - sound{s=block.anvil.land;p=1.6;v=0.4}
+```
+
+## Suspend Mechanic
+
+Suspends entities in air (from suspend-mechanic-skills.yml).
+
+### Suspend
+
+Freezes entity movement temporarily.
+
+## Timer Mechanic
+
+Timer display system (from timer-mechanic-skills.yml).
+
+### Timer
+
+Creates countdown/countup timer displays.
+
+## Vector System
+
+Vector manipulation utilities (from vector-skills.yml).
+
+### get_direction_vector
+
+Calculates direction vector between two points.
+
+<ParamField path="origin" type="location" required>
+  Starting location
+</ParamField>
+
+<ParamField path="vec" type="string" required>
+  Variable name to store result
+</ParamField>
+
+**Sets variables:**
+- `<vec>_vec`: Direction vector
+- `<vec>`: Normalized direction
+
+## Particle Effects
+
+### particle_shockwave-vfx
+
+Creates expanding particle shockwave.
+
+<ParamField path="origin" type="location" required>
+  Center point
+</ParamField>
+
+<ParamField path="points" type="integer" default="32">
+  Number of points in ring
+</ParamField>
+
+<ParamField path="radius" type="number" default="5">
+  Shockwave radius
+</ParamField>
+
+<ParamField path="length" type="number" default="1">
+  Height of effect
+</ParamField>
+
+<ParamField path="particle" type="string" default="cloud">
+  Particle type
+</ParamField>
+
+<ParamField path="debug" type="boolean" default="false">
+  Show debug particles
+</ParamField>
+
+### particle_spiral-vfx
+
+Creates spiral particle effect.
+
+<ParamField path="origin" type="location" required>
+  Starting point
+</ParamField>
+
+<ParamField path="points" type="integer" default="32">
+  Number of points in spiral
+</ParamField>
+
+<ParamField path="radius" type="number" default="2">
+  Spiral radius
+</ParamField>
+
+<ParamField path="height" type="number" default="5">
+  Spiral height
+</ParamField>
+
+<ParamField path="rotations" type="number" default="2">
+  Number of full rotations
+</ParamField>
+
+<ParamField path="particle" type="string" default="flame">
+  Particle type
+</ParamField>
+
+## Mortar Mechanic
+
+Arcing projectile system (from mortar-mechanic.yml).
+
+### mortar
+
+Fires projectile in arc.
+
+<ParamField path="velocity" type="number" default="20">
+  Launch velocity
+</ParamField>
+
+<ParamField path="angle" type="number" default="45">
+  Launch angle in degrees
+</ParamField>
+
+<ParamField path="gravity" type="number" default="-0.08">
+  Gravity value
+</ParamField>
+
+<ParamField path="onHit" type="metaskill" default="[]">
+  Skill on projectile hit
+</ParamField>
+
+<ParamField path="onTick" type="metaskill" default="[]">
+  Skill each projectile tick
+</ParamField>
+
+<ParamField path="onEnd" type="metaskill" default="[]">
+  Skill on projectile end
+</ParamField>
+
+## Insertion Sort
+
+Sorting algorithm implementation for lists (from insertion_sort-demo.yml).
+
+### modifier-insertion_sort
+
+Sorts a list by numeric values.
+
+<ParamField path="list" type="list" required>
+  List to sort (format: "key:value")
+</ParamField>
+
+<ParamField path="order" type="string" default="asc">
+  Sort order: "asc" or "desc"
+</ParamField>
+
+**Returns:** `execution_order` variable with sorted list.

@@ -1,0 +1,185 @@
+---
+title: 'Weapon Movesets'
+description: 'Create flowing attack combos with vanilla hit type integration'
+icon: 'sword'
+---
+
+## Overview
+
+The Moveset system allows you to create flowing attack combos that chain together based on player attacks. Each successive hit in the combo triggers the next skill in the sequence, with automatic reset on timeout.
+
+<Note>
+  Movesets integrate seamlessly with the [Hit Evaluation](/input-handlers/hit-evaluation) mechanic to support different skills for crits, sprints, uppercuts, and aerial attacks.
+</Note>
+
+## How It Works
+
+1. **Sequential Activation**: Each attack increments the moveset index
+2. **Timed Reset**: If no attack occurs within the reset time, the combo resets
+3. **Hit Type Branching**: Different vanilla hit types can trigger different skills at each step
+4. **Auto-Completion**: When max moveset is reached, the sequence automatically ends
+
+## Basic Configuration
+
+<ParamField path="moveset_id" type="string" required>
+  Unique identifier for this moveset. Used to track combo progress per player.
+</ParamField>
+
+<ParamField path="maxmoveset" type="integer" default="3">
+  Maximum number of skills in the combo sequence (1-9).
+</ParamField>
+
+<ParamField path="reset" type="integer" default="1">
+  Time in seconds before the combo resets if no attack occurs.
+</ParamField>
+
+<ParamField path="name" type="string">
+  Display name for the moveset (optional).
+</ParamField>
+
+<ParamField path="1-9" type="skill list">
+  The skill(s) to execute at each position in the combo (parameters 1 through 9).
+</ParamField>
+
+## Hit Type Parameters
+
+You can specify different skills for specific vanilla hit types at each combo position:
+
+<ParamField path="crit" type="skill list">
+  Skills to execute on a critical hit (falling attack).
+</ParamField>
+
+<ParamField path="sprint" type="skill list">
+  Skills to execute on a sprint attack.
+</ParamField>
+
+<ParamField path="uppercut" type="skill list">
+  Skills to execute on an uppercut (crouching + grounded attack).
+</ParamField>
+
+<ParamField path="aerial" type="skill list">
+  Skills to execute on an aerial attack.
+</ParamField>
+
+<ParamField path="weak" type="skill list">
+  Skills to execute on a weak attack (low attack cooldown).
+</ParamField>
+
+## Basic Example
+
+Simple 4-hit combo with messages:
+
+```yaml
+moveset-test_exec:
+  Skills:
+  - skill:Moveset{maxmoveset=4;reset=2;moveset_id=TEST;
+    name="Test Moveset";
+    1=[ - message{m="skill 1"} ];
+    2=[ - message{m="skill 2"} ];
+    3=[ - message{m="skill 3"} ];
+    4=[ - message{m="skill 4"} ]} @self
+```
+
+## Combat Example
+
+A weapon with different effects per combo step:
+
+```yaml
+sword-combo:
+  Skills:
+  - skill:Moveset{maxmoveset=3;reset=1.5;moveset_id=SWORD_COMBO;
+    name="Sword Combo";
+    1=[
+      - damage{a=5}
+      - effect:particles{p=sweep_attack;a=1} @origin
+    ];
+    2=[
+      - damage{a=7}
+      - effect:particles{p=sweep_attack;a=2} @origin
+      - sound{s=entity.player.attack.sweep}
+    ];
+    3=[
+      - damage{a=10}
+      - throw{v=2;vy=0.5}
+      - effect:particles{p=sweep_attack;a=3} @origin
+      - sound{s=entity.player.attack.strong}
+    ]} @trigger
+```
+
+## Hit Type Integration
+
+Combine with hit evaluation for advanced combos:
+
+```yaml
+advanced-sword:
+  Skills:
+  - skill:Moveset{maxmoveset=3;reset=2;moveset_id=ADV_SWORD;
+    1=[
+      - damage{a=5}
+    ];
+    crit=[
+      - damage{a=15}
+      - sound{s=entity.player.attack.crit}
+      - message{m="Critical Strike!"}
+    ];
+    sprint=[
+      - damage{a=8}
+      - throw{v=3}
+      - sound{s=entity.player.attack.knockback}
+    ];
+    uppercut=[
+      - damage{a=6}
+      - throw{v=0;vy=2}
+      - sound{s=entity.player.attack.sweep}
+    ]} @trigger
+```
+
+<Note>
+  The moveset system automatically calls `eval-hit` to determine the hit type and branch to the appropriate skill.
+</Note>
+
+## Usage in Items
+
+Bind to weapon attack trigger:
+
+```yaml
+MyCustomSword:
+  Type: DIAMOND_SWORD
+  Skills:
+  - skill:moveset-exec ~onAttack
+```
+
+## Internal Mechanics
+
+### Variable Tracking
+
+The system uses caster variables to track combo state:
+- `caster.<moveset_id>_maxmoveset` - Maximum combo length
+- `caster.<moveset_id>_moveset_index` - Current position (1 to max)
+- Variables auto-reset when combo completes or times out
+
+### Execution Flow
+
+1. `moveset-exec` → Entry point, checks conditions
+2. `eval-hit` → Determines vanilla hit type
+3. `moveset-start` → Increments index, applies reset timer
+4. Hit type switch → Branches to appropriate skill
+5. `moveset-end` → Cleans up when max reached
+6. `moveset-reset` → Cleans up on timeout
+
+<Warning>
+  Movesets are disabled if the player has the `clickcombo-input` aura active to prevent conflicts with the click combo system.
+</Warning>
+
+## Tips
+
+- Keep `reset` time short (1-2 seconds) for fluid combos
+- Use visual/audio feedback for each step
+- Consider attack cooldown when designing timing
+- Test with different vanilla hit types for variety
+- Use `moveset_id` to run multiple independent movesets
+
+## Related Systems
+
+- [Hit Evaluation](/input-handlers/hit-evaluation) - Detects vanilla hit types
+- [Click Combos](/input-handlers/click-combos) - Alternative input system

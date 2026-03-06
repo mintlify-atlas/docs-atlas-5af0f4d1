@@ -1,0 +1,399 @@
+---
+title: 'Hit Evaluation'
+description: 'Detect and categorize vanilla Minecraft hit types for skill branching'
+icon: 'bullseye'
+---
+
+## Overview
+
+The Hit Evaluation mechanic analyzes player attacks to determine which type of vanilla Minecraft hit occurred: weak hit, critical hit, sprint attack, aerial attack, uppercut, or normal hit. This information can then be used to branch skill execution.
+
+<Note>
+  This mechanic is automatically integrated with the [Weapon Moveset](/input-handlers/weapon-movesets) system but can be used independently for any combat system.
+</Note>
+
+## Hit Types Detected
+
+The system detects these vanilla hit types in order of priority:
+
+<ParamField path="WEAK" type="hit type">
+  **Weak Hit** - Attack with low cooldown (≤0.9)
+  
+  Occurs when attacking before the weapon cooldown is fully recovered.
+</ParamField>
+
+<ParamField path="AERIAL" type="hit type">
+  **Aerial Attack** - Player is very close to ground (0-3 blocks) but not on it
+  
+  Hitting while jumping or falling from a short height.
+</ParamField>
+
+<ParamField path="SPRINT" type="hit type">
+  **Sprint Attack** - Player is sprinting and not crouching
+  
+  The vanilla knockback attack.
+</ParamField>
+
+<ParamField path="HIT" type="hit type">
+  **Normal Hit** - Player is grounded and not crouching
+  
+  Standard attack with no modifiers.
+</ParamField>
+
+<ParamField path="UPPERCUT" type="hit type">
+  **Uppercut** - Player is grounded and crouching
+  
+  Attacking while sneaking on the ground.
+</ParamField>
+
+<ParamField path="CRIT" type="hit type">
+  **Critical Hit** - Player is falling fast (>0.1 downward velocity) and within 3 blocks of ground
+  
+  The vanilla critical hit attack.
+</ParamField>
+
+## Basic Usage
+
+Call the evaluation skill to detect hit type:
+
+```yaml
+MyWeapon:
+  Type: DIAMOND_SWORD
+  Skills:
+  - skill:hit_evaluate ~onAttack
+  - message{m="Hit type: <skill.var.hit>"} ~onAttack
+```
+
+<Note>
+  The hit type is stored in the variable `skill.var.hit` after evaluation.
+</Note>
+
+## Core Evaluation Logic
+
+```yaml
+eval-hit:
+  Conditions:
+  - comparevalue{v1=<caster.attack_cooldown>;op=<=;v2=0.9} cast attack-weak
+  - (altitude{h=0-3} false) castinstead attack-aerial
+  - (isSprinting{} && iscrouching false) castinstead attack-sprint-hit
+  - (onground{} && iscrouching false) castinstead attack-hit
+  - (onground{} && iscrouching true) castinstead attack-uppercut
+  - (fallspeed{s=>0.1} && altitude{h=0-3}) castinstead attack-crit
+```
+
+### Priority Order
+
+1. **WEAK** - Checked first (low cooldown)
+2. **AERIAL** - High altitude, not on ground
+3. **SPRINT** - Sprinting while grounded
+4. **HIT** - Default grounded attack
+5. **UPPERCUT** - Crouching while grounded
+6. **CRIT** - Falling with proper conditions
+
+## Individual Hit Type Skills
+
+```yaml
+attack-weak:
+  Skills:
+  - setvariable{var=hit;type=STRING;value="WEAK"} @self
+
+attack-hit:
+  Skills:
+  - setvariable{var=hit;type=STRING;value="HIT"} @self
+
+attack-sprint-hit:
+  Skills:
+  - setvariable{var=hit;type=STRING;value="SPRINT"} @self
+
+attack-uppercut:
+  Skills:
+  - setvariable{var=hit;type=STRING;value="UPPERCUT"} @self
+
+attack-aerial:
+  Skills:
+  - setvariable{var=hit;type=STRING;value="AERIAL"} @self
+
+attack-crit:
+  Skills:
+  - setvariable{var=hit;type=STRING;value="CRIT"} @self
+```
+
+## Branching Based on Hit Type
+
+Use a switch statement to execute different skills:
+
+```yaml
+weapon-attack:
+  Skills:
+  - skill{s=eval-hit} @self
+  
+  - switch{condition=varequals{var=skill.hit;value=<case>};
+    cases=
+      case WEAK=[
+        - damage{a=2}
+        - message{m="<gray>Weak hit!"}
+      ]
+      case CRIT=[
+        - damage{a=20}
+        - effect:particles{p=crit;a=10}
+        - sound{s=entity.player.attack.crit}
+        - message{m="<red>Critical!"}
+      ]
+      case SPRINT=[
+        - damage{a=10}
+        - throw{v=5;vy=0.5}
+        - sound{s=entity.player.attack.knockback}
+        - message{m="<yellow>Knockback!"}
+      ]
+      case UPPERCUT=[
+        - damage{a=8}
+        - throw{v=0;vy=3}
+        - effect:particles{p=sweep_attack}
+        - message{m="<aqua>Uppercut!"}
+      ]
+      case AERIAL=[
+        - damage{a=12}
+        - effect:particles{p=cloud;a=5}
+        - message{m="<white>Aerial strike!"}
+      ]
+      case DEFAULT=[
+        - damage{a=6}
+      ]
+    } @trigger
+```
+
+## Integration with Movesets
+
+The weapon moveset system automatically calls hit evaluation:
+
+```yaml
+moveset-exec:
+  Skills:
+  - skill{s=setRandomID}
+  - skill{s=eval-hit} @self  # Automatic evaluation
+  - skill{s=moveset-start}
+```
+
+Then use hit-specific skills in moveset configuration:
+
+```yaml
+advanced-sword:
+  Skills:
+  - skill:Moveset{maxmoveset=3;reset=2;moveset_id=ADV;
+    1=[ - damage{a=5} ];           # Normal first hit
+    crit=[ - damage{a=15} ];        # Crit override
+    sprint=[ - throw{v=3} ];        # Sprint override
+    uppercut=[ - throw{vy=2} ];     # Uppercut override
+    aerial=[ - damage{a=10} ];      # Aerial override
+    weak=[ - damage{a=1} ]          # Weak override
+  } @trigger
+```
+
+<Note>
+  When using movesets, you don't need to manually call `eval-hit` - it's automatically invoked by `moveset-exec`.
+</Note>
+
+## Standalone Combat Example
+
+Using hit evaluation without movesets:
+
+```yaml
+CombatSword:
+  Type: DIAMOND_SWORD
+  Display: '<gradient:#FF0000:#FF6600>Battle Blade</gradient>'
+  Skills:
+  - skill:combat-hit-handler ~onAttack
+
+combat-hit-handler:
+  Skills:
+  - skill{s=eval-hit} @self
+  
+  # Execute appropriate combat skill
+  - switch{condition=varequals{var=skill.hit;value=<case>};
+    cases=
+      case WEAK=[ - vskill{s=combat-weak} ]
+      case CRIT=[ - vskill{s=combat-crit} ]
+      case SPRINT=[ - vskill{s=combat-sprint} ]
+      case UPPERCUT=[ - vskill{s=combat-uppercut} ]
+      case AERIAL=[ - vskill{s=combat-aerial} ]
+      case DEFAULT=[ - vskill{s=combat-normal} ]
+    } @trigger
+
+combat-weak:
+  Skills:
+  - damage{a=2}
+  - actionmessage{m="<gray>⚠ Not ready!"}
+
+combat-crit:
+  Skills:
+  - damage{a=18}
+  - effect:particles{p=crit;a=20;hs=0.5;vs=0.5}
+  - effect:particles{p=enchanted_hit;a=10}
+  - sound{s=entity.player.attack.crit;v=1;p=0.8}
+  - actionmessage{m="<red>⚡ CRITICAL!"}
+
+combat-sprint:
+  Skills:
+  - damage{a=8}
+  - throw{v=4;vy=0.3}
+  - sound{s=entity.player.attack.knockback}
+  - effect:particles{p=sweep_attack;a=3}
+  - actionmessage{m="<yellow>→ Sprint Attack!"}
+
+combat-uppercut:
+  Skills:
+  - damage{a=7}
+  - throw{v=0;vy=2.5}
+  - sound{s=entity.player.attack.sweep}
+  - effect:particles{p=sweep_attack;a=5;y=0}
+  - actionmessage{m="<aqua>↑ Uppercut!"}
+
+combat-aerial:
+  Skills:
+  - damage{a=10}
+  - throw{v=1;vy=-1}
+  - sound{s=entity.player.attack.strong}
+  - effect:particles{p=cloud;a=8}
+  - actionmessage{m="<white>↓ Aerial Strike!"}
+
+combat-normal:
+  Skills:
+  - damage{a=6}
+  - effect:particles{p=sweep_attack;a=1}
+```
+
+## Condition Breakdown
+
+### Weak Hit Detection
+```yaml
+- comparevalue{v1=<caster.attack_cooldown>;op=<=;v2=0.9} cast attack-weak
+```
+Checks if attack cooldown is 90% or less (not fully charged).
+
+### Aerial Detection
+```yaml
+- (altitude{h=0-3} false) castinstead attack-aerial
+```
+Player is NOT within 0-3 blocks of ground (meaning higher up or not grounded).
+
+### Sprint Detection
+```yaml
+- (isSprinting{} && iscrouching false) castinstead attack-sprint-hit
+```
+Player is sprinting AND not crouching.
+
+### Uppercut Detection
+```yaml
+- (onground{} && iscrouching true) castinstead attack-uppercut
+```
+Player is on ground AND crouching.
+
+### Critical Hit Detection
+```yaml
+- (fallspeed{s=>0.1} && altitude{h=0-3}) castinstead attack-crit
+```
+Player is falling faster than 0.1 blocks/tick AND within 3 blocks of ground.
+
+## Timing Considerations
+
+<Warning>
+  **Call Early**: Hit evaluation should be called as soon as possible in your skill chain, ideally directly in the `~onAttack` trigger. Delays can cause conditions to change before evaluation completes.
+</Warning>
+
+```yaml
+# Good - immediate evaluation
+MyWeapon:
+  Skills:
+  - skill:hit_evaluate ~onAttack
+  - skill:do-combat ~onAttack
+
+# Bad - delayed evaluation
+MyWeapon:
+  Skills:
+  - delay{t=10} ~onAttack
+  - skill:hit_evaluate ~onAttack  # Player state may have changed
+```
+
+## Custom Hit Types
+
+Extend the system with custom hit types:
+
+```yaml
+eval-hit-extended:
+  Conditions:
+  # Original checks
+  - comparevalue{v1=<caster.attack_cooldown>;op=<=;v2=0.9} cast attack-weak
+  - (altitude{h=0-3} false) castinstead attack-aerial
+  
+  # Custom: Backstab
+  - facingDirection{d=BEHIND} castinstead attack-backstab
+  
+  # Custom: Low health finisher
+  - (entityHealth{h=<5} @trigger) castinstead attack-execute
+  
+  # Continue with original checks...
+  - (isSprinting{} && iscrouching false) castinstead attack-sprint-hit
+  # ...
+
+attack-backstab:
+  Skills:
+  - setvariable{var=hit;type=STRING;value="BACKSTAB"} @self
+
+attack-execute:
+  Skills:
+  - setvariable{var=hit;type=STRING;value="EXECUTE"} @self
+```
+
+## Best Practices
+
+### 1. Provide Visual Feedback
+
+Make hit types clear to players:
+
+```yaml
+- effect:particles{p=crit;a=20} # For crits
+- sound{s=entity.player.attack.crit} # For crits
+- actionmessage{m="<red>CRIT!"} # For crits
+```
+
+### 2. Balance Damage Values
+
+Maintain clear damage hierarchy:
+- WEAK: 20-30% normal damage
+- HIT: 100% base damage
+- SPRINT: 130-150% damage + knockback
+- UPPERCUT: 120-140% damage + vertical launch
+- AERIAL: 150-180% damage
+- CRIT: 200-300% damage
+
+### 3. Test Edge Cases
+
+Some conditions can overlap:
+- Sprinting while falling → Depends on priority order
+- Crouching while jumping → Usually becomes aerial
+- Low cooldown overrides everything → Always checked first
+
+## Debug Mode
+
+Add debugging to see detected hit types:
+
+```yaml
+eval-hit-debug:
+  Conditions:
+  - comparevalue{v1=<caster.attack_cooldown>;op=<=;v2=0.9} cast attack-weak
+  - (altitude{h=0-3} false) castinstead attack-aerial
+  - (isSprinting{} && iscrouching false) castinstead attack-sprint-hit
+  - (onground{} && iscrouching false) castinstead attack-hit
+  - (onground{} && iscrouching true) castinstead attack-uppercut
+  - (fallspeed{s=>0.1} && altitude{h=0-3}) castinstead attack-crit
+
+attack-weak:
+  Skills:
+  - setvariable{var=hit;type=STRING;value="WEAK"} @self
+  - message{m="[DEBUG] Hit: WEAK | Cooldown: <caster.attack_cooldown>"} @self
+```
+
+## Related Systems
+
+- [Weapon Movesets](/input-handlers/weapon-movesets) - Uses hit evaluation for combo branching
+- [Click Combos](/input-handlers/click-combos) - Alternative input system

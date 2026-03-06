@@ -1,0 +1,437 @@
+---
+title: Demo Spell Examples
+description: Learn how to create advanced spell systems with real examples from IonTech's Modular Systems
+---
+
+# Demo Spell Examples
+
+These demo spells showcase different features of the modular spell system, from projectile mechanics to channeling and area effects.
+
+<Tabs>
+  <Tab title="Burning Blast">
+    ## Burning Blast
+    
+    A channeled projectile spell that forms and unleashes a burning ball of magma. Upon impact, it deals 250% damage and ignites all targets in a small radius.
+    
+    ### Key Features
+    - **Channeling system** with warmup period
+    - **Projectile retargeting** during channel phase
+    - **Visual effects** that evolve during flight
+    - **Area of effect** damage on impact
+    - **Damage scaling** at 250% base damage
+    
+    ### How It Works
+    
+    <Accordion title="1. Spell Registration">
+      The spell is registered with the spell system, defining its cooldown, warmup, and channel behaviors:
+      
+      ```yaml
+      burning_blast-cast:
+        Skills:
+        - skill:Spell{id=burning_blast;name=Burning Blast;type=ABILITY;
+          spellcd=3;warmup=0.6;
+          onChannelStart=burning_blast-exec;
+          onChannelTick=[ 
+            - vskill{s=channel-tick_fx} 
+            - potion{t=SLOWNESS;l=2;duration=4;a=false;i=false;p=false}
+            ]} @self
+      ```
+      
+      - `spellcd=3`: 3 second cooldown
+      - `warmup=0.6`: 0.6 second channel time
+      - `onChannelTick`: Applies slowness while channeling
+    </Accordion>
+    
+    <Accordion title="2. Projectile Launch">
+      Once channeling completes, the spell fires a projectile:
+      
+      ```yaml
+      burning_blast-fire:
+        Skills:
+        - skill:setRandomID
+        - setvarloc{var=originloc;v=@origin}
+        - setvar{var=fired;val=0}
+        - projectile{fo=true;ti=3;syo=0;sfo=0;hnp=true;se=true;ham=true;
+          velocity=0.1;i=1;g=0;mr=32;hr=0.4;vr=0.4;drawhitbox=false;
+          bullet=DISPLAY;material=magma;rots=0,12,12;scale=0.5,0.5,0.5;
+          onStart=burning_blast-start;
+          onTick=burning_blast-tick;
+          onHit=burning_blast-hit_entity;
+          onEnd=burning_blast-end}
+      ```
+      
+      - Uses `DISPLAY` entity with `magma` material
+      - Starts slow (`velocity=0.1`) then accelerates
+      - Tracks origin location for retargeting
+    </Accordion>
+    
+    <Accordion title="3. Retargeting During Channel">
+      While channeling, the projectile follows your cursor:
+      
+      ```yaml
+      burning_blast-retarget:
+        Conditions:
+        - varequals{var=fired;val=0}
+        Skills:
+        - raytraceto{fo=true;origin=@selfeyelocation;md=64;rw=0.1;ys=0;yt=0;
+          locationskill=[
+          - setProjectileDirection{magnitude=1}
+          ]} @forward{f=12;uel=true}
+      ```
+      
+      Only retargets when `fired=0` (during channel phase)
+    </Accordion>
+    
+    <Accordion title="4. Impact & Damage">
+      On hit or at the end of flight, deals area damage:
+      
+      ```yaml
+      burning_blast-hit_entity:
+        Skills:
+        - skill:damage-ability{immune=20;
+          damageMod=[ - variableMath{var=damage;equation="x*2.5"} ];
+          onHit=[
+          - ignite{t=80}
+          ]} 
+      
+      burning_blast-end:
+        Skills:
+        - skill{s=burning_blast-hit_entity} @ENO{r=3}
+        - sound{s=entity.generic.explode;p=1.2} 
+        - e:p{p=explosion;a=1}
+        - e:p{p=flame;a=12;speed=0.3}
+      ```
+      
+      - Multiplies damage by 2.5x
+      - Ignites targets for 4 seconds (80 ticks)
+      - Hits all enemies within 3 blocks at impact location
+    </Accordion>
+    
+    ### Full Code
+    
+    <CodeGroup>
+    ```yaml burning_blast-spell.yml
+    # Form and unleash a burning ball of magma. Upon impact, deals 250% damage and ignites all targets in a small radius.
+    burning_blast-cast:
+      Skills:
+      - skill:Spell{id=burning_blast;name=Burning Blast;type=ABILITY;
+        spellcd=3;warmup=0.6;
+        onChannelStart=burning_blast-exec;
+        onChannelTick=[ 
+          - vskill{s=channel-tick_fx} 
+          - potion{t=SLOWNESS;l=2;duration=4;a=false;i=false;p=false}
+          ]} @self
+    
+    burning_blast-exec:
+      Skills:
+      - skill:burning_blast-fire{origin=@forward{uel=true;f=1;yo=-0.2}} @forward{yo=-0.2;f=12;uel=true}
+    
+    burning_blast-fire:
+      Skills:
+      - skill:setRandomID
+      - setvarloc{var=originloc;v=@origin}
+      - setvar{var=fired;val=0}
+      - projectile{fo=true;ti=3;syo=0;sfo=0;hnp=true;se=true;ham=true;
+        velocity=0.1;i=1;g=0;mr=32;hr=0.4;vr=0.4;drawhitbox=false;
+        bullet=DISPLAY;material=magma;rots=0,12,12;scale=0.5,0.5,0.5;
+        onStart=burning_blast-start;
+        onTick=burning_blast-tick;
+        onHit=burning_blast-hit_entity;
+        onEnd=burning_blast-end}
+    
+    burning_blast-start:
+      Skills:
+      - wait{c=[ - hasaura{aura=<skill.var.id>-channel} false ]}
+      - delay 1
+      - modifyprojectile{t=VELOCITY;a=SET;v=12}
+      - modifyprojectile{t=VELOCITY;a=ADD;v=1;repeat=6;repeati=4}
+      - setvar{var=fired;val=1}
+    
+    burning_blast-tick:
+      Skills:
+      - setvar{var=iterations;value="<skill.var.iterations|0>+1"}
+      - skill:burning_blast-retarget
+      - skill:burning_blast-tick_vfx
+    
+    burning_blast-retarget:
+      Conditions:
+      - varequals{var=fired;val=0}
+      Skills:
+      - raytraceto{fo=true;origin=@selfeyelocation;md=64;rw=0.1;ys=0;yt=0;
+        locationskill=[
+        - setProjectileDirection{magnitude=1}
+        ]} @forward{f=12;uel=true}
+    
+      - setvar{var=pitch;val="<skill.var.pitch|0>+12"} 
+      - setvar{var=yaw;val="<skill.var.yaw|0>+12"}
+      - setvar{var=roll;val="<skill.var.roll|0>+12"}
+    
+      - polygon{points=1;scale=1;db=0.5;mpd=false;
+        pitch=<skill.var.pitch>;yaw=<skill.var.yaw>;roll=<skill.var.roll>;
+          oe=[ 
+          - e:p{p=small_flame;fo=true;origin=@targetedlocation;directional=true;a=1;speed=0.2} @projectileforward{f=0}
+          ]} 
+    
+    burning_blast-tick_vfx:
+      Conditions:
+      - varequals{var=fired;val=1}
+      Skills:
+      - setvarloc{var=originloc;v=@ProjectileForward{f=-4}}
+      - slash{fromorigin=true;origin=@origin;mpd=false;dtt=true;fo=0;yo=0;
+        angle=360;points=2;w=<skill.var.size|1>;h=<skill.var.size|1>;duration=0;pitch=90;roll="<skill.var.iterations>*24";
+        oP=[
+        - e:p{fo=true;origin=@VariableLocation{var=originloc};p=small_flame;a=1;directional=true;speed=0.3;hs=0.2;vs=0.2} @targetedlocation
+        ]}
+    
+    burning_blast-hit_entity:
+      Skills:
+      - skill:damage-ability{immune=20;
+        damageMod=[ - variableMath{var=damage;equation="x*2.5"} ];
+        onHit=[
+        - ignite{t=80}
+        ]} 
+    
+    burning_blast-end:
+      Skills:
+      - skill{s=burning_blast-hit_entity} @ENO{r=3}
+      - sound{s=entity.generic.explode;p=1.2} 
+      - e:p{p=explosion;a=1}
+      - e:p{p=flame;a=12;speed=0.3}
+      - e:pr{p=flame;radius=0.1;points=12;a=1;speed=0.4;hS=0.20;vS=0.8;directional=true} 
+    
+      - e:p{p=reddust;color=#ff0000;amount=4;speed=0;hS=0.40;vS=0.4;size=2}
+      - e:p{p=reddust;color=#ff6600;amount=4;speed=0;hS=0.40;vS=0.4;size=2}
+      - e:p{p=reddust;color=#ff0000;amount=1;speed=0;hS=0.40;vS=0.4;size=5}
+      - e:p{p=reddust;color=#ffaa00;amount=1;speed=0;hS=0.40;vS=0.4;size=5}
+    ```
+    </CodeGroup>
+  </Tab>
+  
+  <Tab title="Collapse">
+    ## Collapse
+    
+    A destructive area-of-effect spell that destabilizes blocks and pulls entities toward a central point.
+    
+    <Warning>
+      **Warning:** Do not cast on things you want intact! This spell destroys blocks.
+    </Warning>
+    
+    ### Key Features
+    - **Block destruction** via destabilization
+    - **Entity pulling** toward target location
+    - **Target selection** integration
+    - **Configurable radius**
+    
+    ### How It Works
+    
+    This spell demonstrates a simple but powerful pattern using the target selection system:
+    
+    ```yaml
+    collapse-cast:
+      Skills:
+      - skill:select_target{id=[
+        - blockDestabilize @BIR{radius=<skill.var.radius|8>}
+        - pull{to=true;v=6;origin=@targetedlocation} @NLNO{radius=<skill.var.radius|8>}
+        ]} @self
+    ```
+    
+    <Accordion title="Understanding the Mechanics">
+      **Target Selection**
+      - Uses `select_target` to choose where to cast
+      - Executes multiple effects at the selected location
+      
+      **Block Destabilization**
+      - `blockDestabilize` breaks blocks in the area
+      - `@BIR{radius=8}` targets blocks in radius (default 8)
+      
+      **Entity Pull**
+      - `pull{to=true;v=6}` pulls entities at velocity 6
+      - `@NLNO{radius=8}` targets non-living non-owner entities
+      - Origin is set to `@targetedlocation`
+      
+      **Radius Variable**
+      - `<skill.var.radius|8>` uses skill variable or defaults to 8
+      - Can be customized when calling the spell
+    </Accordion>
+    
+    ### Integration Example
+    
+    This spell can be integrated into items or other spells:
+    
+    ```yaml
+    # Item that casts collapse with custom radius
+    destruction_wand:
+      Id: STICK
+      Display: "Wand of Destruction"
+      Skills:
+      - skill{s=collapse-cast;radius=12} @self ~onUse
+    
+    # Spell that uses collapse as part of combo
+    earthquake-cast:
+      Skills:
+      - skill:Spell{id=earthquake;name=Earthquake;spellcd=20;
+        onChannelEnd=[
+        - skill{s=collapse-cast;radius=15}
+        - sound{s=entity.generic.explode;v=2}
+        ]} @self
+    ```
+    
+    ### Full Code
+    
+    ```yaml collapse-skills.yml
+    # Note: Do not cast on things you want intact
+    collapse-cast:
+      Skills:
+      - skill:select_target{id=[
+        - blockDestabilize @BIR{radius=<skill.var.radius|8>}
+        - pull{to=true;v=6;origin=@targetedlocation} @NLNO{radius=<skill.var.radius|8>}
+        ]} @self
+    ```
+  </Tab>
+  
+  <Tab title="Empowered Pull">
+    ## Empowered Pull
+    
+    A channeled force spell that pulls enemies toward a point in front of you during channeling, then blasts them away upon completion.
+    
+    ### Key Features
+    - **Channeling mechanics** with targeting phase
+    - **Continuous pulling** during channel
+    - **Interrupt handling** with cooldown application
+    - **Force type** spell classification
+    - **Mana and pierce** integration
+    
+    ### How It Works
+    
+    This spell demonstrates advanced channeling with interrupt handling:
+    
+    ```yaml
+    empowered_pull-cast:
+      Skills:
+      - skill:Spell{id=empowered_pull-exec;name=Empowered Pull;type=ABILITY,FORCE;
+        damage=3;spellcd=12;mana_charge=3;pierce=10;warmup=0.6;
+        onChannelStart=empowered_pull-target;
+        onChannelTick=empowered_pull-targeting;
+        onInterrupt=[
+        - vskill{s=channel-interrupt_fx}
+        - vskill{s=spell-cooldown}  
+        ]} @self
+    ```
+    
+    <Accordion title="Spell Configuration">
+      **Basic Properties**
+      - `type=ABILITY,FORCE`: Classified as both ability and force spell
+      - `damage=3`: Base damage value
+      - `spellcd=12`: 12 second cooldown
+      - `mana_charge=3`: Costs 3 mana charges
+      - `pierce=10`: Can pierce through 10 targets
+      
+      **Channel Configuration**
+      - `warmup=0.6`: 0.6 second initial channel time
+      - `onChannelStart`: Executes targeting setup
+      - `onChannelTick`: Runs every tick during channel
+      - `onInterrupt`: Handles interruption gracefully
+      
+      **Interrupt Handling**
+      - Plays interrupt visual effects
+      - Still applies the cooldown even when interrupted
+      - Prevents spam casting
+    </Accordion>
+    
+    <Accordion title="Development Notes">
+      This spell includes commented-out implementation code that shows the intended mechanics:
+      
+      ```yaml
+      # Targeting phase - store yaw/pitch and location
+      # empowered_pull-target:
+      #   Skills:
+      #   - setvar{var=yaw;val=<caster.l.yaw>;type=FLOAT}
+      #   - setvar{var=pitch;val="<caster.l.pitch>+90";type=FLOAT}
+      #   - setvarloc{var=target_location;val=@targetedLocation} @forward{f=12;uel=true}
+      
+      # Execution phase - create portal effects and pull
+      # empowered_pull-exec:
+      #   Skills:
+      #   - polygon{points=6;scale=3;db=0.5;...}
+      #   - skill{s=empowered_pull-hit_entity} @entitiesInLine{r=3;fromorigin=true}
+      
+      # Hit effect - damage and pull targets
+      # empowered_pull-hit_entity:
+      #   Skills:
+      #   - skill:spell_damage
+      #   - pull{to=true;origin=@forward{f=2};v=12}
+      #   - e:p{p=portal;a=2;hs=0.3;vs=0.5;y=1}
+      ```
+      
+      This provides a template for implementing similar channeled force spells.
+    </Accordion>
+    
+    ### Full Code
+    
+    ```yaml empowered_pull-spell.yml
+    # While channelling, pulls enemies towards a point in front of you. Upon completion, blast the pulled enemies away.
+    empowered_pull-cast:
+      Skills:
+      - skill:Spell{id=empowered_pull-exec;name=Empowered Pull;type=ABILITY,FORCE;
+        damage=3;spellcd=12;mana_charge=3;pierce=10;warmup=0.6;
+        onChannelStart=empowered_pull-target;
+        onChannelTick=empowered_pull-targeting;
+        onInterrupt=[
+        - vskill{s=channel-interrupt_fx}
+        - vskill{s=spell-cooldown}  
+        ]} @self
+    
+    # Implementation notes in source file show intended mechanics:
+    # - Store target location and orientation during channel start
+    # - Create portal visual effects at target location
+    # - Pull entities along line from caster to target
+    # - Apply spell damage with portal particles
+    ```
+  </Tab>
+</Tabs>
+
+## Common Patterns
+
+These demo spells illustrate several reusable patterns:
+
+### Channeling System
+All spells use the `skill:Spell` wrapper with channel callbacks:
+- `onChannelStart`: Initial setup
+- `onChannelTick`: Continuous effects
+- `onInterrupt`: Cleanup and cooldown
+
+### Variable Management
+Spells use variables for state tracking:
+- `setvar` and `setvarloc` for storage
+- `<skill.var.name|default>` for retrieval with defaults
+- `varequals` conditions for state checks
+
+### Damage Scaling
+The `damage-ability` skill provides:
+- `damageMod` for scaling (e.g., `x*2.5` for 250%)
+- `immune` for hit immunity frames
+- `onHit` for additional effects
+
+### Visual Effects
+Consistent particle effect patterns:
+- `e:p` for particle effects
+- `e:pr` for particle rings
+- Color coding with `reddust` particles
+- Sound effects synchronized with actions
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Weapon Combos" icon="swords" href="/examples/weapon-combos">
+    Learn how to create combo systems for weapons
+  </Card>
+  <Card title="Custom Items" icon="wand-magic-sparkles" href="/examples/custom-items">
+    Build custom items that integrate with spells
+  </Card>
+  <Card title="Spell System" icon="book-sparkles" href="/skill-handlers/spell-casting">
+    Understand the core spell system mechanics
+  </Card>
+  <Card title="Skill Reference" icon="code" href="/api/skills/mechanics">
+    Browse all available skill mechanics
+  </Card>
+</CardGroup>

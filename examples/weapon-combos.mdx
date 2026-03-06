@@ -1,0 +1,431 @@
+---
+title: Weapon Combo Examples
+description: Create dynamic combat systems with combo weapons that respond to player input sequences
+---
+
+# Weapon Combo Examples
+
+Weapon combos allow you to create dynamic combat systems where consecutive hits trigger different effects. These examples demonstrate how to implement practical combo systems for different weapon types.
+
+## Overview
+
+The combo system tracks player input sequences and executes different skills based on the combo count. This creates engaging combat mechanics where timing and positioning matter.
+
+<Tabs>
+  <Tab title="Combo Sword">
+    ## Combo Sword
+    
+    A melee weapon that tracks consecutive hits and triggers different effects based on combo count.
+    
+    ### Configuration
+    
+    ```yaml
+    test-combo_sword:
+      Id: DIAMOND_SWORD
+      Display: "<#DC143C>Combo Sword"  
+      Lore:
+      - "&6Combo &r&8» <#DC143C>Test Combo &e3🕑"
+      - "&o&7Consecutive hits cause different effects!"
+      Skills:
+      - skill{s=[
+          - skill{s=combo-apply;maxcombo=5;reset=3;
+            name="Randomness";id=test-shot-exec;
+            spellcooldown=3}
+          - skill{s=combo-hit;id=test-shot-exec;
+            1=[ - message{m="Hit 1"} ];
+            2=[ - message{m="Hit 2"} ];
+            3=[ - message{m="Hit 3"} ];
+            4=[ - message{m="Hit 4"} ];
+            5=[ - message{m="Hit 5"} ]}
+        ]} @self ~onAttack ?equipslot{slot=HAND}
+    ```
+    
+    ### How It Works
+    
+    <Accordion title="Combo Application">
+      The `combo-apply` skill manages the combo state:
+      
+      ```yaml
+      - skill{s=combo-apply;maxcombo=5;reset=3;
+        name="Randomness";id=test-shot-exec;
+        spellcooldown=3}
+      ```
+      
+      **Parameters:**
+      - `maxcombo=5`: Maximum combo count (resets after 5)
+      - `reset=3`: Reset timer in seconds (combo resets if no hit within 3s)
+      - `name="Randomness"`: Internal identifier for this combo
+      - `id=test-shot-exec`: Unique ID for tracking
+      - `spellcooldown=3`: Cooldown after max combo reached
+    </Accordion>
+    
+    <Accordion title="Combo Hits">
+      The `combo-hit` skill defines what happens at each combo level:
+      
+      ```yaml
+      - skill{s=combo-hit;id=test-shot-exec;
+        1=[ - message{m="Hit 1"} ];
+        2=[ - message{m="Hit 2"} ];
+        3=[ - message{m="Hit 3"} ];
+        4=[ - message{m="Hit 4"} ];
+        5=[ - message{m="Hit 5"} ]}
+      ```
+      
+      Each number corresponds to a combo count and executes a skill list. Replace the messages with actual combat skills.
+    </Accordion>
+    
+    <Accordion title="Trigger Conditions">
+      The skill triggers on attack when equipped:
+      
+      ```yaml
+      @self ~onAttack ?equipslot{slot=HAND}
+      ```
+      
+      - `~onAttack`: Triggers when player attacks
+      - `?equipslot{slot=HAND}`: Only when item is in main hand
+    </Accordion>
+    
+    ### Practical Implementation
+    
+    Replace the test messages with real combat skills:
+    
+    ```yaml
+    test-combo_sword:
+      Id: DIAMOND_SWORD
+      Display: "<#FF6B6B>Blazing Combo Sword"  
+      Lore:
+      - "&6Combo &r&8» <#FF6B6B>Fire Strikes &e3🕑"
+      - "&o&7Build up devastating fire attacks!"
+      Skills:
+      - skill{s=[
+          - skill{s=combo-apply;maxcombo=5;reset=3;
+            name="FireCombo";id=fire-combo;
+            spellcooldown=5}
+          - skill{s=combo-hit;id=fire-combo;
+            1=[ 
+              - damage{a=5}
+              - e:p{p=flame;a=3}
+            ];
+            2=[ 
+              - damage{a=8}
+              - e:p{p=flame;a=6}
+              - sound{s=entity.blaze.shoot}
+            ];
+            3=[ 
+              - damage{a=12}
+              - e:p{p=flame;a=10}
+              - ignite{t=40}
+            ];
+            4=[ 
+              - damage{a=15}
+              - e:p{p=flame;a=15}
+              - ignite{t=60}
+              - sound{s=entity.generic.explode;p=1.5}
+            ];
+            5=[ 
+              - damage{a=25}
+              - e:p{p=explosion;a=3}
+              - e:p{p=flame;a=20}
+              - ignite{t=100}
+              - sound{s=entity.generic.explode}
+            ]}
+        ]} @Target ~onAttack ?equipslot{slot=HAND}
+    ```
+  </Tab>
+  
+  <Tab title="Combo Bow">
+    ## Combo Bow
+    
+    A ranged weapon that tracks arrow hits and triggers different projectile effects based on combo count.
+    
+    ### Configuration
+    
+    ```yaml
+    test-combo_bow:
+      Id: BOW
+      Display: "<#DC143C>Combo Bow"  
+      Lore:
+      - "&6Combo &r&8» <#DC143C>Test Bow Combo &e3🕑"
+      - "&o&7Consecutive hits cause... effects?"
+      Skills:
+      - skill{s=[
+          - skill{s=combo-apply;maxcombo=5;reset=3;
+            name="Randomness2";id=test-spiralshot-exec;
+            spellcooldown=3}
+          - skill{s=combo-hit;id=test-spiralshot-exec;
+            1=[ - vskill{s=[ - message{m=hit testing} ]} @self ];
+            2=[ - vskill{s=arrow_explosive-fire;origin=@selfeyelocation;damage="1.2*<caster.damage>";delay=2} @trigger{yo=1.5} ];
+            3=[ - message{m="Hit 3"} ];
+            4=[ - message{m="Hit 4"} ];
+            5=[ - message{m="Hit 5"} ]}
+        ]} @self ~onBowHit ?equipslot{slot=HAND}
+    ```
+    
+    ### How It Works
+    
+    <Accordion title="Bow-Specific Trigger">
+      Unlike melee weapons, this uses `~onBowHit`:
+      
+      ```yaml
+      @self ~onBowHit ?equipslot{slot=HAND}
+      ```
+      
+      - `~onBowHit`: Triggers when arrow hits target
+      - Still requires the bow to be in main hand
+    </Accordion>
+    
+    <Accordion title="Projectile Integration">
+      The second hit demonstrates projectile spawning:
+      
+      ```yaml
+      2=[ - vskill{s=arrow_explosive-fire;
+            origin=@selfeyelocation;
+            damage="1.2*<caster.damage>";
+            delay=2} @trigger{yo=1.5} ]
+      ```
+      
+      - Uses `vskill` to call another skill with parameters
+      - `origin=@selfeyelocation`: Spawns from player's eye
+      - `damage="1.2*<caster.damage>"`: Scales with player damage
+      - `@trigger{yo=1.5}`: Targets hit location with Y offset
+    </Accordion>
+    
+    <Accordion title="Damage Scaling">
+      Ranged combos often use damage multiplication:
+      
+      ```yaml
+      damage="1.2*<caster.damage>"
+      ```
+      
+      This multiplies the player's base damage stat, allowing the combo to scale with player progression.
+    </Accordion>
+    
+    ### Practical Implementation
+    
+    A fully implemented arrow combo bow:
+    
+    ```yaml
+    elemental_bow:
+      Id: BOW
+      Display: "<#4ECDC4>Elemental Combo Bow"  
+      Lore:
+      - "&6Combo &r&8» <#4ECDC4>Elemental Arrows &e3🕑"
+      - "&o&7Each hit changes your element!"
+      Skills:
+      - skill{s=[
+          - skill{s=combo-apply;maxcombo=5;reset=4;
+            name="ElementalCombo";id=elemental-combo;
+            spellcooldown=6}
+          - skill{s=combo-hit;id=elemental-combo;
+            1=[ 
+              - damage{a=10}
+              - e:p{p=flame;a=5} @trigger
+              - ignite{t=40} @trigger
+            ];
+            2=[ 
+              - damage{a=12}
+              - e:p{p=splash;a=8;hs=0.5} @trigger
+              - potion{t=SLOWNESS;l=1;d=60} @trigger
+            ];
+            3=[ 
+              - damage{a=14}
+              - e:p{p=electric_spark;a=10} @trigger
+              - lightning{sync=true} @trigger
+            ];
+            4=[ 
+              - damage{a=16}
+              - e:p{p=item_snowball;a=12} @trigger
+              - potion{t=SLOWNESS;l=3;d=80} @trigger
+              - e:p{p=snow_shovel;a=20;r=2} @trigger
+            ];
+            5=[ 
+              - damage{a=25}
+              - vskill{s=arrow_explosive-fire;damage="2.0*<caster.damage>"} @trigger
+              - e:p{p=explosion;a=5} @trigger
+              - sound{s=entity.generic.explode}
+            ]}
+        ]} @self ~onBowHit ?equipslot{slot=HAND}
+    ```
+  </Tab>
+</Tabs>
+
+## Combo System Integration
+
+The combo system requires two core skills that work together:
+
+### combo-apply
+
+Manages combo state and timing:
+
+```yaml
+Parameters:
+  maxcombo: Maximum combo count before reset
+  reset: Seconds before combo resets
+  name: Display name for combo
+  id: Unique identifier
+  spellcooldown: Cooldown after max combo
+```
+
+### combo-hit
+
+Executes skills based on combo count:
+
+```yaml
+Parameters:
+  id: Must match combo-apply id
+  1, 2, 3, 4, 5...: Skill lists for each combo level
+```
+
+## Design Patterns
+
+### Progressive Damage
+
+```yaml
+1=[ - damage{a=5} ];
+2=[ - damage{a=8} ];
+3=[ - damage{a=12} ];
+4=[ - damage{a=18} ];
+5=[ - damage{a=30} ];
+```
+
+Increase damage with each hit to reward consistent play.
+
+### Status Effect Chains
+
+```yaml
+1=[ - potion{t=SLOWNESS;l=1;d=40} ];
+2=[ - potion{t=SLOWNESS;l=2;d=60} ];
+3=[ - potion{t=WEAKNESS;l=1;d=60} - potion{t=SLOWNESS;l=2;d=60} ];
+4=[ - potion{t=WEAKNESS;l=2;d=80} - potion{t=SLOWNESS;l=3;d=80} ];
+5=[ - potion{t=WITHER;l=2;d=100} ];
+```
+
+Stack debuffs that culminate in a powerful final effect.
+
+### Elemental Progression
+
+```yaml
+1=[ - ignite{t=40} - e:p{p=flame} ];  # Fire
+2=[ - lightning{sync=true} - e:p{p=electric_spark} ];  # Lightning  
+3=[ - potion{t=SLOWNESS;l=3} - e:p{p=snow_shovel} ];  # Ice
+4=[ - potion{t=POISON;l=2;d=80} - e:p{p=slime} ];  # Nature
+5=[ - pull{v=5} - damage{a=25} - e:p{p=portal} ];  # Void
+```
+
+Cycle through elements for visual variety.
+
+### Area Effects at Milestones
+
+```yaml
+1=[ - damage{a=8} ];
+2=[ - damage{a=10} ];
+3=[ - damage{a=12} - skill{s=small-aoe} @ENO{r=3} ];  # AoE at 3
+4=[ - damage{a=15} ];
+5=[ - damage{a=20} - skill{s=large-aoe} @ENO{r=5} ];  # Bigger AoE at 5
+```
+
+Reward combo milestones with area damage.
+
+## Advanced Techniques
+
+### Combo Branching
+
+Create different combo paths based on conditions:
+
+```yaml
+test-branching_sword:
+  Id: DIAMOND_SWORD
+  Display: "<#FFD700>Adaptive Sword"
+  Skills:
+  - skill{s=[
+      - skill{s=combo-apply;maxcombo=3;reset=3;name="Branch";id=branch-combo;spellcooldown=4}
+      - skill{s=combo-hit;id=branch-combo;
+        1=[ - damage{a=10} ];
+        2=[ - damage{a=15} - setvar{var=branch;val=1} ];
+        3=[
+          - skill{s=fire-finisher} ?varequals{var=branch;val=1}
+          - skill{s=ice-finisher} ?varequals{var=branch;val=2}
+        ]}
+    ]} @Target ~onAttack ?equipslot{slot=HAND}
+  
+  # Hold shift at hit 2 for ice path
+  - skill{s=[ - setvar{var=branch;val=2} ]} @self ~onAttack ?isCrouching ?equipslot{slot=HAND}
+```
+
+### Combo Reset Rewards
+
+Grant bonuses when maintaining max combo:
+
+```yaml
+- skill{s=[
+    - skill{s=combo-apply;maxcombo=5;reset=2;name="Maintain";id=maintain-combo;spellcooldown=0}
+    - skill{s=combo-hit;id=maintain-combo;
+      5=[
+        - damage{a=30}
+        - aura{name=combo-master;d=5;i=1;
+          onTick=[
+            - e:p{p=reddust;color=#FFD700;size=1.5}
+            - modifyDamage{m=1.2}
+          ]}
+      ]}
+  ]} @Target ~onAttack ?equipslot{slot=HAND}
+```
+
+## Full Example: Warrior's Blade
+
+```yaml test-combo_weapons-items.yml
+test-combo_sword:
+  Id: DIAMOND_SWORD
+  Display: "<#DC143C>Combo Sword"  
+  Lore:
+  - "&6Combo &r&8» <#DC143C>Test Combo &e3🕑"
+  - "&o&7Consecutive hits cause different effects!"
+  Skills:
+  - skill{s=[
+      - skill{s=combo-apply;maxcombo=5;reset=3;
+        name="Randomness";id=test-shot-exec;
+        spellcooldown=3}
+      - skill{s=combo-hit;id=test-shot-exec;
+        1=[ - message{m="Hit 1"} ];
+        2=[ - message{m="Hit 2"} ];
+        3=[ - message{m="Hit 3"} ];
+        4=[ - message{m="Hit 4"} ];
+        5=[ - message{m="Hit 5"} ]}
+    ]} @self ~onAttack ?equipslot{slot=HAND}
+
+test-combo_bow:
+  Id: BOW
+  Display: "<#DC143C>Combo Bow"  
+  Lore:
+  - "&6Combo &r&8» <#DC143C>Test Bow Combo &e3🕑"
+  - "&o&7Consecutive hits cause... effects?"
+  Skills:
+  - skill{s=[
+      - skill{s=combo-apply;maxcombo=5;reset=3;
+        name="Randomness2";id=test-spiralshot-exec;
+        spellcooldown=3}
+      - skill{s=combo-hit;id=test-spiralshot-exec;
+        1=[ - vskill{s=[ - message{m=hit testing} ]} @self ];
+        2=[ - vskill{s=arrow_explosive-fire;origin=@selfeyelocation;damage="1.2*<caster.damage>";delay=2} @trigger{yo=1.5} ];
+        3=[ - message{m="Hit 3"} ];
+        4=[ - message{m="Hit 4"} ];
+        5=[ - message{m="Hit 5"} ]}
+    ]} @self ~onBowHit ?equipslot{slot=HAND}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Demo Spells" icon="sparkles" href="/examples/demo-spells">
+    Integrate spell systems with weapon combos
+  </Card>
+  <Card title="Custom Items" icon="wand-magic-sparkles" href="/examples/custom-items">
+    Create items that work with combos
+  </Card>
+  <Card title="Skill Reference" icon="code" href="/api/skills/handlers">
+    Browse all available skills
+  </Card>
+  <Card title="Item System" icon="box" href="/api/items">
+    Deep dive into item configuration
+  </Card>
+</CardGroup>

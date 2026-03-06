@@ -1,0 +1,94 @@
+---
+title: "Introduction"
+description: "A modular framework for MythicMobs that provides reusable gameplay systems and logic for Minecraft servers"
+---
+
+## Welcome to IonTech's Modular Systems
+
+IonTech's Modular Systems is a comprehensive pack of systems and logic designed for use within the MythicMobs plugin. The original intent of this project was to centralize commonly used gameplay logic for Minecraft servers into modules, minimizing technical debt and providing a scalable foundation for MythicMobs enthusiasts to build upon.
+
+This pack contains "modules" that take in inputs via Skill Parameters to handle complex behavior. Every module is designed to integrate with all other modules, allowing for complex behavior by nesting modules within each other.
+
+<Note>
+  This framework requires a basic understanding of MythicMobs for effective use. Think of it as a primer to advanced MythicMobs usage.
+</Note>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Weapon Movesets" icon="sword" href="/input-handlers/weapon-movesets">
+    Create flowing attack combos that integrate perfectly into vanilla gameplay
+  </Card>
+  <Card title="Click Combos" icon="hand-pointer" href="/input-handlers/click-combos">
+    Wynncraft-style click combination casting system
+  </Card>
+  <Card title="Spell Casting Handler" icon="wand-magic-sparkles" href="/skill-handlers/spell-casting">
+    Manages cooldowns, charges, casting VFX, and stats
+  </Card>
+  <Card title="Modifier Handler" icon="layer-group" href="/skill-handlers/modifier-handler">
+    Stack custom buffs, debuffs, and modular skills
+  </Card>
+  <Card title="Damage Core" icon="burst" href="/skill-handlers/damage-core">
+    Percentage-scaling damage with damage indicators
+  </Card>
+  <Card title="Knockback Core" icon="arrows-from-dotted-line" href="/skill-handlers/knockback-core">
+    Consistent, deterministic directional knockback
+  </Card>
+  <Card title="Advanced Slashes" icon="slash" href="/skill-mechanics/advanced-slashes">
+    Handler for creating slash effects with accurate hitboxes
+  </Card>
+  <Card title="Projectile Skills" icon="arrows-to-dot" href="/skill-mechanics/projectiles">
+    Fire multiple projectiles with piercing and spread patterns
+  </Card>
+</CardGroup>
+
+## Quick Navigation
+
+<CardGroup cols={2}>
+  <Card title="Get Started" icon="rocket" href="/installation">
+    Install dependencies and configure your server
+  </Card>
+  <Card title="Quickstart Guide" icon="book-open" href="/quickstart">
+    Build your first modular skill in minutes
+  </Card>
+  <Card title="Core Concepts" icon="lightbulb" href="/concepts/modular-design">
+    Learn about modular design principles
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/skills/handlers">
+    Explore the complete skill API
+  </Card>
+</CardGroup>
+
+## What You Can Build
+
+With IonTech's Modular Systems, you can create:
+
+- **Complex Combat Systems**: Flowing weapon combos, spell casting mechanics, and custom damage calculations
+- **Interactive Abilities**: Click-based casting, spell cycling, and ability queueing
+- **Custom Gameplay Logic**: Buffs/debuffs that stack, modular skill trees, and Risk of Rain-style item systems
+- **Visual Effects**: Advanced slash animations, particle spirals, shockwaves, and damage indicators
+- **Mob Mechanics**: Custom AI templates, leveling systems, and spawn handlers
+
+<Warning>
+  This pack provides minimal documentation with working examples. It's designed for users who want to explore and experiment with advanced MythicMobs functionality.
+</Warning>
+
+## Next Steps
+
+<Steps>
+  <Step title="Install Dependencies">
+    Set up MythicMobs Premium, Crucible, ModelEngine, and PlaceholderAPI
+    
+    [View installation guide →](/installation)
+  </Step>
+  <Step title="Learn Core Concepts">
+    Understand how modules work and how they integrate with each other
+    
+    [Read core concepts →](/concepts/modular-design)
+  </Step>
+  <Step title="Build Your First Skill">
+    Follow our quickstart guide to create a modular spell
+    
+    [Start building →](/quickstart)
+  </Step>
+</Steps>

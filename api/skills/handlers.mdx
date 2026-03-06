@@ -1,0 +1,472 @@
+---
+title: Skill Handlers API
+description: API reference for skill handlers in IonTech's Modular Systems
+---
+
+Skill handlers provide core functionality for spell casting, damage, knockback, and mana systems.
+
+## Spell Handler
+
+Comprehensive spell casting system with cooldowns, charges, warmup, and channeling.
+
+### Spell
+
+Main spell execution handler.
+
+<ParamField path="id" type="string" required>
+  Unique spell identifier
+</ParamField>
+
+<ParamField path="name" type="string" default="Unknown">
+  Display name for the spell
+</ParamField>
+
+<ParamField path="type" type="string" default="Unknown">
+  Spell category/type for classification
+</ParamField>
+
+<ParamField path="damage" type="number">
+  Base damage value
+</ParamField>
+
+<ParamField path="spell_cooldown" type="number" default="1">
+  Cooldown duration in seconds
+</ParamField>
+
+<ParamField path="warmup" type="number" default="0">
+  Warmup/cast time in seconds
+</ParamField>
+
+<ParamField path="charges" type="integer" default="0">
+  Number of charges (0 = no charge system)
+</ParamField>
+
+<ParamField path="charge_cooldown" type="number" default="3">
+  Time to regenerate one charge in seconds
+</ParamField>
+
+<ParamField path="charge_delay" type="number" default="0">
+  Delay before charge regeneration starts
+</ParamField>
+
+<ParamField path="critical_chance" type="number" default="0.01">
+  Critical hit chance (0.0-1.0)
+</ParamField>
+
+<ParamField path="critical_damage" type="number" default="0">
+  Critical damage multiplier bonus
+</ParamField>
+
+<ParamField path="displaycd" type="boolean" default="true">
+  Show cooldown messages
+</ParamField>
+
+<ParamField path="debug" type="boolean" default="false">
+  Enable debug output
+</ParamField>
+
+### Spell Lifecycle Hooks
+
+<ParamField path="onChannelStart" type="metaskill" default="channel-start_fx">
+  Executed when channeling begins
+</ParamField>
+
+<ParamField path="onChannelTick" type="metaskill" default="channel-tick_fx">
+  Executed each tick during channeling
+</ParamField>
+
+<ParamField path="onCast" type="metaskill" default="channel-cast_fx">
+  Executed when spell is cast
+</ParamField>
+
+<ParamField path="onInterrupt" type="metaskill" default="[]">
+  Executed on any interrupt
+</ParamField>
+
+<ParamField path="onForceInterrupt" type="metaskill" default="channel-force_interrupt-default">
+  Executed on forced interrupt (stun, etc)
+</ParamField>
+
+<ParamField path="onManualInterrupt" type="metaskill" default="[]">
+  Executed on manual interrupt (player cancel)
+</ParamField>
+
+<ParamField path="onCooldownCast" type="metaskill" default="[]">
+  Executed when cast while on cooldown
+</ParamField>
+
+<ParamField path="onCooldownEnd" type="metaskill" default="[]">
+  Executed when cooldown expires
+</ParamField>
+
+### Channeling System
+
+**spell-channel**
+
+Handles spell warmup/casting time.
+
+- Creates terminable aura with `type=channel`
+- Shows boss bar with cast progress
+- Summons channel_indicator display entity
+- Checks for interrupts (force_interrupt, manual_interrupt)
+- Sets `caster.cast_fatigue` after successful cast
+
+**Interrupt Variables:**
+
+<ParamField path="caster.force_interrupt" type="boolean">
+  Set to true to force interrupt (e.g., stun)
+</ParamField>
+
+<ParamField path="caster.manual_interrupt" type="boolean">
+  Set to true for manual interrupt (e.g., casting another spell)
+</ParamField>
+
+### Charge System
+
+**spell-charges-cast**
+
+Handles spells with multiple charges.
+
+- Tracks charges in `caster.<id>-charges`
+- Decrements charge on cast
+- Initiates recharge delay
+- Regenerates charges over time
+
+**spell-charges_regen**
+
+Regenerates spell charges.
+
+- Only runs when charges < max_charges
+- Shows boss bar with charge count and timer
+- Calls itself recursively until full
+
+### Cooldown Management
+
+**spell-cooldown**
+
+Applies cooldown aura.
+
+- Creates aura with `type=cooldown`
+- Updates `caster.<id>-cd` variable each tick
+- Shows boss bar with cooldown timer
+- Triggers `spell-cooldown_end` on expiration
+
+**spell-reset_cooldown**
+
+Resets cooldown instantly.
+
+- Removes cooldown aura
+- Triggers `COOLDOWN_RESET` modifier event
+- Clears cooldown variable
+
+## Modifier Handler
+
+Dynamic modifier system for stacking buffs/debuffs.
+
+### modifier
+
+Adds a modifier to the caster.
+
+<ParamField path="modifier_name" type="string" required>
+  Unique name for this modifier
+</ParamField>
+
+<ParamField path="o" type="metaskill" required>
+  Operation/skill to execute
+</ParamField>
+
+<ParamField path="trigger" type="string" default="PRECAST">
+  Trigger event: `PRECAST`, `CAST`, `DAMAGE`, `PRE_DAMAGE`, `COOLDOWN_END`, `CRITICAL_DAMAGE`, `WEAPON_HIT`, `ABILITY_HIT`
+</ParamField>
+
+<ParamField path="priority" type="integer" default="1">
+  Execution priority (1-7, higher = earlier)
+  - 1: LOWEST
+  - 2: LOW
+  - 3: MEDIUM
+  - 4: HIGH
+  - 5: SPELL SELECT
+  - 6: SPELL EXECUTION
+  - 7: MONITOR
+</ParamField>
+
+<ParamField path="stacks" type="integer" default="1">
+  Stack count for the modifier
+</ParamField>
+
+### modifier-trigger
+
+Executes all modifiers for a trigger event.
+
+<ParamField path="trigger" type="string" required>
+  Trigger event to execute
+</ParamField>
+
+<ParamField path="update" type="boolean" default="false">
+  Force update of modifier list
+</ParamField>
+
+### modifier-remove
+
+Removes modifiers by name.
+
+<ParamField path="modifier_name" type="string" required>
+  Name of modifier to remove
+</ParamField>
+
+### modifier-clear
+
+Removes all modifiers from caster.
+
+### Example
+
+```yaml
+blazingsun_apply:
+  Skills:
+  - skill:modifier{
+      modifier_name="Blazing Sun";
+      o=blazingsun_modifier;
+      trigger=PRECAST;
+      priority=7;
+      stacks=3
+    } @self
+
+blazingsun_modifier:
+  Skills:
+  - variableMath{var=damage;equation='x*20'}
+  - variableMath{var=warmup;equation='x*0.2'}
+  - setvar{var=caster.blazing_sun;val=<caster.var.blazing_sun>-1}
+  - skill{s=modifier-remove;modifier_name=Blazing Sun} ?varinrange{var=caster.blazing_sun;val=<1}
+```
+
+## Damage Core
+
+Advanced damage system with hit tracking and modifiers.
+
+### damage
+
+Standard damage skill.
+
+<ParamField path="damage" type="number" required>
+  Damage amount
+</ParamField>
+
+<ParamField path="damage_source" type="string" default="NONE">
+  Source of damage (for modifiers)
+</ParamField>
+
+<ParamField path="damage_type" type="string">
+  Type of damage (defaults to damage_source)
+</ParamField>
+
+<ParamField path="immune" type="integer" default="5">
+  Immunity ticks after hit
+</ParamField>
+
+<ParamField path="damage_id" type="string" default="default">
+  Identifier for hit tracking
+</ParamField>
+
+<ParamField path="damageMod" type="metaskill" default="[]">
+  Skill to modify damage before applying
+</ParamField>
+
+<ParamField path="preHit" type="metaskill" default="[]">
+  Skill executed before damage
+</ParamField>
+
+<ParamField path="onHit" type="metaskill" default="[]">
+  Skill executed after damage
+</ParamField>
+
+### damage-weapon
+
+Weapon damage with WEAPON tag.
+
+- Same parameters as `damage`
+- Triggers `WEAPON_HIT` modifier event
+- Tags damage as `tag=WEAPON`
+
+### damage-ability
+
+Ability damage with stagger effect.
+
+- Same parameters as `damage`
+- Applies suspension and stagger
+- Triggers `ABILITY_HIT` modifier event
+- Tags damage as `tag=ABILITY`
+
+### Hit Tracking
+
+**Variables:**
+
+<ParamField path="hit_list" type="list">
+  List of UUID strings for entities hit by this skill
+</ParamField>
+
+<ParamField path="hit_count" type="integer">
+  Number of entities hit
+</ParamField>
+
+<ParamField path="targeted" type="string">
+  UUID of current target
+</ParamField>
+
+### Damage Indicator
+
+**damage_indicator**
+
+Displays floating damage numbers.
+
+- Creates text display projectile
+- Scales based on damage percent
+- Flies toward caster with drag
+- Uses `<placeholder.damage_text>` for formatting
+
+## Knockback Core
+
+Advanced knockback system with directional control.
+
+### knockback
+
+Applies knockback to entities.
+
+<ParamField path="kb" type="number" default="0">
+  Horizontal knockback velocity
+</ParamField>
+
+<ParamField path="kby" type="number" default="0">
+  Vertical knockback velocity
+</ParamField>
+
+<ParamField path="origin" type="location">
+  Origin point for knockback direction
+</ParamField>
+
+<ParamField path="vertical" type="boolean" default="true">
+  Apply vertical component
+</ParamField>
+
+### Variables
+
+<ParamField path="knockback_direction" type="location">
+  Direction target for knockback (set with setvarloc)
+</ParamField>
+
+### Example
+
+```yaml
+knockback_away:
+  Skills:
+  - setvarloc{var=knockback_direction;val=@forward{f=20;lockpitch=true}}
+  - skill:knockback{kb=12;origin=@selflocation;vertical=false} @ENO{r=12}
+```
+
+## Melee Core
+
+Melee combat system with moveset integration.
+
+### Melee
+
+Main melee handler.
+
+<ParamField path="damage" type="number">
+  Base melee damage (defaults to caster.damage)
+</ParamField>
+
+**Auto-detects hit types:**
+- **Sweep:** Normal hit (moveset index 1)
+- **Weak:** Weak attack (attack cooldown < 0.9)
+- **Sprint:** Sprint attack
+- **Critical:** Critical hit
+- **Uppercut:** Crouching hit
+- **Aerial:** Air attack
+
+### Knockback Types
+
+**knockback-melee_weak**
+- kb=1.25, kby=0.75 (ground)
+- kb=1.25, kby=-0.75 (air)
+
+**knockback-melee_strong**
+- kb=1.5, kby=0.75 (ground)
+- kb=1.5, kby=-0.75 (air)
+
+**knockback-melee_critical**
+- Same as weak but with crit sound
+
+**knockback-melee_uppercut**
+- kb=1.25, kby=1.6 (launches upward)
+
+## Mana Charge
+
+Mana charge/resource system.
+
+### mana_charge
+
+Adds or removes mana charge.
+
+<ParamField path="mana" type="number" required>
+  Mana to add (positive) or remove (negative)
+</ParamField>
+
+### Variables
+
+<ParamField path="caster.mana_charge" type="number" default="0">
+  Current mana charge
+</ParamField>
+
+<ParamField path="caster.mana_charge_max" type="number" default="100">
+  Maximum mana charge
+</ParamField>
+
+<ParamField path="caster.mana_charge_decay" type="number">
+  Mana decay per tick (10% of max per second)
+</ParamField>
+
+### mana_charge-decay
+
+Automatic mana decay system.
+
+- Decays when not channeling
+- Removes mana_charged aura when depleted
+- Updates action bar display
+
+## Other Handlers
+
+### setRandomID
+
+Generates random ID for hit tracking.
+
+```yaml
+setRandomID:
+  Skills:
+  - setvar{var=randomid;val="<caster.uuid>_<random.-65536to65536>";type=STRING}
+```
+
+### summon_handler
+
+Initializes summoned entities.
+
+- Sets owner UUID and name
+- Sets parent relationship
+- Initializes combat state
+- Updates name display
+
+### spell_cast-defaults
+
+Default stat mapping for spells.
+
+**stat_map-default**
+
+Sets up default spell parameters:
+- spell_power, damage, critical stats
+- mana costs, charges
+- warmup, cooldowns
+- velocity, spread, range, radius
+- knockback_modifier, status_duration
+
+**Default VFX:**
+- channel-start_fx: Sound effects for channeling
+- channel-tick_fx: Particle effects during channel
+- channel-cast_fx: Cast completion effects

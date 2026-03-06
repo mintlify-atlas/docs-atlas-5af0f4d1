@@ -1,0 +1,383 @@
+---
+title: Items API
+description: API reference for items in IonTech's Modular Systems
+---
+
+Item configuration templates for weapons, armor, and interactive items.
+
+## Base Item Templates
+
+### weapon
+
+Base template for all weapons.
+
+```yaml
+weapon:
+  Options:
+    PreventDropping: false
+    KeepOnDeath: false
+    Unbreakable: true
+    Placeable: false
+  Hide:
+    - UNBREAKABLE
+    - DYE
+```
+
+**Options:**
+- `PreventDropping`: Allow dropping (false)
+- `KeepOnDeath`: Lose on death (false)
+- `Unbreakable`: Items don't break
+- `Placeable`: Can't place as block
+
+**Hidden Attributes:**
+- Unbreakable flag
+- Dye color info
+
+### melee
+
+Melee weapon template.
+
+```yaml
+melee:
+  Template: weapon
+  Id: GOLDEN_SWORD
+```
+
+### bow
+
+Ranged weapon template.
+
+```yaml
+bow:
+  Template: weapon
+  Id: BOW
+```
+
+### wand
+
+Spell casting wand template.
+
+```yaml
+wand:
+  Template: weapon
+  Id: STICK
+```
+
+## Click Combo Weapons
+
+### click_combo-normal
+
+Standard click combo weapon (3 inputs).
+
+```yaml
+click_combo-normal:
+  Template: weapon
+  Id: STICK
+  Display: "Normal Click Combo"
+  Lore: "RIGHT-CLICK to Cast spells."
+  Slot: HAND
+  Options:
+    PreventDropping: true
+  Skills:
+  - skill{s=click_combo-sendinput;key=DROP} @self ~onDropitem
+  - skill{s=click_combo-sendinput;key=LEFT} @self ~onSwing
+  - skill{s=click_combo-sendinput;key=RIGHT} @self ~onUse
+  - skill{s=click_combo-sendinput;key=SWAP} @self ~onPressF
+  - skill{s=click_combo-force_end} @self ~onUnHeld
+```
+
+**Input Mapping:**
+- **LEFT**: Swing (left-click)
+- **RIGHT**: Use (right-click)
+- **DROP**: Drop item key (Q)
+- **SWAP**: Swap hands (F)
+
+**Features:**
+- 3-input combo system
+- Visual subtitle feedback
+- Auto-ends when unequipped
+- 2-tick cooldown on left-click to prevent double-input
+
+### click_combo-quick
+
+Quick-cast combo weapon (2 inputs).
+
+```yaml
+click_combo-quick:
+  Template: weapon
+  Id: STICK
+  Display: "Quick Click Combo"
+  Lore: "SWAP to Quick-cast spells."
+  Slot: HAND
+  Options:
+    PreventDropping: true
+  Skills:
+  - skill{s=click_combo-sendinput;key=SWAP} @self ~onPressF
+  - skill{s=click_combo-sendinput;key=LEFT} @self ~onSwing
+  - skill{s=click_combo-sendinput;key=RIGHT} @self ~onUse
+  - skill{s=click_combo-force_end} @self ~onUnHeld
+```
+
+**Features:**
+- 2-input combo (faster casting)
+- Initiated by SWAP key (F)
+- Supports crouch modifier for +DOWN variants
+
+### click_combo-wynn
+
+Wynncraft-style casting weapon.
+
+```yaml
+click_combo-wynn:
+  Template: weapon
+  Id: STICK
+  Display: "Wynn Wand Click Combo"
+  Lore: "RIGHT-CLICK to Cast spells."
+  Skills:
+  - skill{s=click_combo-sendinput;key=LEFT} @self ~onSwing
+  - skill{s=click_combo-sendinput;key=RIGHT} @self ~onUse
+  - skill{s=click_combo-force_end} @self ~onUnHeld
+```
+
+**Features:**
+- Simple left/right click combos
+- No visual indicators
+- Wynncraft-style spell system
+
+## NBT-Driven Wand
+
+### nbt_wand-quick
+
+Data-driven click combo wand with NBT storage.
+
+```yaml
+nbt_wand-quick:
+  Id: STICK
+  Template: click_combo-quick
+  Display: "NBT Driven Click Combo Wand"
+  NBT:
+    spells:
+      LMB:
+        name: ""
+        meta: ""
+      RMB:
+        name: ""
+        meta: ""
+      DROP:
+        name: ""
+        meta: ""
+      SWAPL:
+        name: ""
+        meta: ""
+      SWAPR:
+        name: ""
+        meta: ""
+      SWAPDROP:
+        name: ""
+        meta: ""
+      SWAPSWAP:
+        name: ""
+        meta: ""
+  UseCooldown:
+    CooldownGroup: wand
+    CooldownSeconds: 1
+```
+
+**NBT Structure:**
+
+<ParamField path="spells.<input>.name" type="string">
+  Display name of spell
+</ParamField>
+
+<ParamField path="spells.<input>.meta" type="string">
+  Metaskill ID to execute
+</ParamField>
+
+**Input Keys:**
+- `LMB`: Left mouse button
+- `RMB`: Right mouse button
+- `DROP`: Drop key (Q)
+- `SWAPL`: Swap + Left
+- `SWAPR`: Swap + Right
+- `SWAPDROP`: Swap + Drop
+- `SWAPSWAP`: Swap + Swap
+
+**Skills:**
+
+```yaml
+Skills:
+  # Direct inputs (not in combo mode)
+  - vskill{s=<caster.item.hand.nbt.spells.LMB.meta>} @self ~onSwing ?!hasaura{aura=clickcombo-input}
+  - vskill{s=<caster.item.hand.nbt.spells.RMB.meta>} @self ~onUse ?!hasaura{aura=clickcombo-input}
+  - vskill{s=<caster.item.hand.nbt.spells.DROP.meta>} @self ~onPressQ ?!hasaura{aura=clickcombo-input}
+  
+  # Update lore on equip
+  - updatelore{s=HAND} @self ~onHold
+  
+  # Quick-cast combo system
+  - skill:click_combo{type=QUICK;
+      SWAPL=[- vskill{s=<caster.item.hand.nbt.spells.SWAPL.meta>}];
+      SWAPR=[- vskill{s=<caster.item.hand.nbt.spells.SWAPR.meta>}];
+      SWAPDROP=[- vskill{s=<caster.item.hand.nbt.spells.SWAPDROP.meta>}];
+      SWAPSWAP=[- vskill{s=<caster.item.hand.nbt.spells.SWAPSWAP.meta>}]
+    } @self ~onPressF
+```
+
+**Dynamic Lore:**
+
+```yaml
+Lore:
+  - "<#C0C0C0>Spells:"
+  - "&8» [<#00BCFF>LMB<#C0C0C0>] <white><caster.item.nbt.spells.LMB.name|<dark_gray>Unset>"
+  - "&8» [<#00BCFF>RMB<#C0C0C0>] <white><caster.item.nbt.spells.RMB.name|<dark_gray>Unset>"
+  - "&8» [<#00BCFF>DROP<#C0C0C0>] <white><caster.item.nbt.spells.DROP.name|<dark_gray>Unset>"
+  - ""
+  - "<#C0C0C0>Click Combos:"
+  - "&8» [<#00BCFF>SWAP+LEFT<#C0C0C0>] <white><caster.item.nbt.spells.SWAPL.name>"
+  - "&8» [<#00BCFF>SWAP+RIGHT<#C0C0C0>] <white><caster.item.nbt.spells.SWAPR.name>"
+  - "&8» [<#00BCFF>SWAP+DROP<#C0C0C0>] <white><caster.item.nbt.spells.SWAPDROP.name>"
+  - "&8» [<#00BCFF>SWAP+SWAP<#C0C0C0>] <white><caster.item.nbt.spells.SWAPSWAP.name>"
+```
+
+Lore updates automatically from NBT data using placeholders.
+
+## Cycle Wand
+
+### cyclewand
+
+Legacy spell cycling wand.
+
+```yaml
+cyclewand:
+  Template: weapon
+  Id: STICK
+  Display: "Base Cycle Wand"
+  NBT:
+    activespell: int/1
+    maxspells: int/3
+  Skills:
+    - skill{s=spell-cycle-cast} @self ~onSwing
+    - skill{s=spell-cycle-right} @self ~onUse ?!isCrouching
+    - skill{s=spell-cycle-left} @self ~onUse ?isCrouching
+```
+
+**NBT:**
+- `activespell`: Current spell index (1-9)
+- `maxspells`: Total spells available
+
+**Controls:**
+- **Swing**: Cast active spell
+- **Right-click**: Cycle right
+- **Crouch + Right-click**: Cycle left
+
+## Demo Items
+
+### apprentice_wand
+
+Fully configured example wand.
+
+```yaml
+apprentice_wand:
+  Id: BLAZE_ROD
+  Template: click_combo-quick
+  Display: 'Apprentice Wand'
+  Lore: "Quick Varient"
+  Skills:
+  - skill{s=frost_shard-cast} @self ~onSwing ?!hasaura{aura=clickcombo-input}
+  - skill{s=click_combo;type=QUICK;duration=10;debug=false;
+      SWAPL=burning_blast-cast;
+      SWAPR=flame_flicker-cast;
+      SWAPDROP=spark_jolt-cast;
+      SWAPSWAP=glacial_spikes-cast;
+      SWAPL+DOWN=void_lance-cast
+    } @self ~onPressF
+```
+
+**Spell Mapping:**
+- **Left-click**: frost_shard-cast (default)
+- **SWAP+L**: burning_blast-cast
+- **SWAP+R**: flame_flicker-cast
+- **SWAP+DROP**: spark_jolt-cast
+- **SWAP+SWAP**: glacial_spikes-cast
+- **SWAP+L+CROUCH**: void_lance-cast
+
+## Item Configuration Format
+
+### Common Fields
+
+<ParamField path="Id" type="string" required>
+  Minecraft material ID
+</ParamField>
+
+<ParamField path="Template" type="string">
+  Inherit from template(s), comma-separated
+</ParamField>
+
+<ParamField path="Display" type="string">
+  Item display name (supports color codes)
+</ParamField>
+
+<ParamField path="Lore" type="string[]">
+  Item lore lines (supports color codes and placeholders)
+</ParamField>
+
+<ParamField path="Slot" type="string">
+  Equipment slot: HAND, OFFHAND, HEAD, CHEST, LEGS, FEET
+</ParamField>
+
+<ParamField path="NBT" type="object">
+  Custom NBT data (key-value pairs)
+</ParamField>
+
+<ParamField path="Skills" type="array">
+  Skills triggered by item events
+</ParamField>
+
+<ParamField path="UseCooldown.CooldownGroup" type="string">
+  Shared cooldown group name
+</ParamField>
+
+<ParamField path="UseCooldown.CooldownSeconds" type="number">
+  Cooldown duration in seconds
+</ParamField>
+
+### Item Options
+
+<ParamField path="Options.PreventDropping" type="boolean" default="false">
+  Prevent item from being dropped
+</ParamField>
+
+<ParamField path="Options.KeepOnDeath" type="boolean" default="false">
+  Keep item after death
+</ParamField>
+
+<ParamField path="Options.Unbreakable" type="boolean" default="false">
+  Make item unbreakable
+</ParamField>
+
+<ParamField path="Options.Placeable" type="boolean" default="true">
+  Allow placing as block
+</ParamField>
+
+### Hide Flags
+
+```yaml
+Hide:
+  - UNBREAKABLE
+  - ENCHANTS
+  - ATTRIBUTES
+  - DYE
+  - POTION_EFFECTS
+```
+
+## Item Triggers
+
+Available item skill triggers:
+
+- `~onSwing` - Left-click/attack
+- `~onUse` - Right-click
+- `~onHold` - While held in hand
+- `~onUnHeld` - When unequipped
+- `~onDropitem` - When item dropped
+- `~onPressF` - Swap hands key (F)
+- `~onPressQ` - Drop key (Q)

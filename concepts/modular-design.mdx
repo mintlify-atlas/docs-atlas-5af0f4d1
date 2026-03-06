@@ -1,0 +1,213 @@
+---
+title: Modular Design Philosophy
+description: Understanding the core design principles behind IonTech's Modular Systems
+---
+
+## Overview
+
+IonTech's Modular Systems is built on a fundamental principle: **centralize commonly used gameplay logic into reusable modules**. Rather than copying and pasting skill configurations across your MythicMobs setup, you build complex behaviors by composing smaller, specialized modules.
+
+<Note>
+Every module is designed to integrate with all other modules, allowing for complex behavior by nesting modules within each other.
+</Note>
+
+## What Are Modules?
+
+Modules are self-contained skill systems that:
+- Accept inputs via **skill parameters** (using `<skill.parameter>` syntax)
+- Handle specific gameplay logic independently
+- Can be nested within each other for composition
+- Minimize technical debt by centralizing common patterns
+
+<Tip>
+Think of modules like LEGO bricks—each one has a specific purpose, but you can combine them in countless ways to create complex systems.
+</Tip>
+
+## Core Design Principles
+
+### 1. Parameter-Driven Configuration
+
+Modules accept configuration through skill parameters rather than hard-coded values. This makes them flexible and reusable:
+
+```yaml
+# Instead of hard-coding values:
+my_spell:
+  Skills:
+  - damage{a=50}
+  - cooldown{d=100}
+
+# Use parameterized modules:
+my_spell:
+  Skills:
+  - skill:Spell{id=my_spell;
+      name=My Spell;
+      damage=50;
+      spellcd=100}
+```
+
+### 2. Integration by Design
+
+All modules in the system are designed to work together seamlessly. For example:
+
+- **Spell Handler** manages casting, cooldowns, and warmups
+- **Damage Core** handles percentage-based damage scaling
+- **Knockback Core** provides deterministic knockback
+- **Modifier Handler** enables custom buffs/debuffs
+
+These modules don't just coexist—they're built to integrate:
+
+```yaml
+frost_shard-hit_entity:
+  Skills:
+  # Damage Core integrates with Spell Handler's damage values
+  - skill:damage-ability{immune=10;
+      damageMod=[ - variableMath{var=damage;equation="x*0.25"} ];
+      onHit=[
+      - freeze{t=20}
+      ]}
+```
+
+### 3. Nested Composition
+
+Modules can call other modules, creating layers of functionality:
+
+```yaml
+# Top level: Spell Handler
+burning_blast-cast:
+  Skills:
+  - skill:Spell{id=burning_blast;
+      name=Burning Blast;
+      spellcd=3;
+      warmup=0.6;
+      onChannelStart=burning_blast-exec}
+
+# Second level: Projectile logic
+burning_blast-fire:
+  Skills:
+  - skill:setRandomID  # Module for damage tracking
+  - projectile{...;
+      onHit=burning_blast-hit_entity}
+
+# Third level: Damage Handler
+burning_blast-hit_entity:
+  Skills:
+  - skill:damage-ability{...}  # Damage Core module
+```
+
+## Module Categories
+
+<Tabs>
+  <Tab title="Input Handlers">
+    Handle player input and bind skills to actions:
+    
+    - **Weapon Movesets** - Flowing attack combos integrated with vanilla mechanics
+    - **Click Combos** - Wynncraft-style combination casting (e.g., LLL, RRR)
+    - **Spell Cycling** - Cycle through up to 9 bound skills on items
+    - **Hit Evaluation** - Detect vanilla hit types (CRIT, SPRINT, WEAK)
+  </Tab>
+  
+  <Tab title="Skill Handlers">
+    Core logic systems that other modules integrate with:
+    
+    - **Spell Casting Handler** - The heart of the system; handles casting, cooldowns, charges, VFX
+    - **Damage Core** - Percentage-based damage with visual indicators
+    - **Knockback Core** - Consistent, deterministic knockback mechanics
+    - **Modifier Handler** - Stack custom buffs, debuffs, and stat bonuses
+    - **Melee Core** - Simulate vanilla melee mechanics 1:1
+  </Tab>
+  
+  <Tab title="Skill Mechanics">
+    Specialized gameplay systems:
+    
+    - **Advanced Slashes** - VFX-accurate slash hitboxes with customization
+    - **Projectile Skills** - Arcing spreads, radial barrages, piercing logic
+    - **Custom Stuns** - Interrupt casting and channeling through the Spell Handler
+    - **Vector Mechanics** - Distance, direction, velocity calculations
+    - **Particle Effects** - Spirals, shockwaves, and custom VFX
+  </Tab>
+</Tabs>
+
+## Benefits of Modular Design
+
+### Scalability
+
+Add new spells without rewriting core logic. The `frost_shard` and `burning_blast` demo spells both use:
+- The same Spell Handler for casting
+- The same Damage Core for dealing damage
+- The same setRandomID module for damage tracking
+
+Yet they behave completely differently based on parameters.
+
+### Maintainability
+
+Fix a bug once, and it's fixed everywhere. If you improve the cooldown display in the Spell Handler, all spells using that handler benefit automatically.
+
+### Consistency
+
+All spells cast through the Spell Handler have consistent behavior:
+- Cooldown displays work the same way
+- Charge systems behave predictably
+- Channeling interrupts follow the same rules
+- VFX and sound effects are standardized
+
+### Customization
+
+Despite being modular, the system is highly customizable:
+
+```yaml
+spell-cast:
+  Skills:
+  - skill:Spell{id=custom_spell;
+      name=Custom Spell;
+      spellcd=5;
+      warmup=1.2;
+      charges=3;
+      chargecd=8;
+      chargedelay=2;
+      onChannelStart=custom_start;
+      onChannelTick=custom_tick;
+      onCast=custom_cast;
+      onCooldownEnd=custom_cooldown_end}
+```
+
+Every callback (`onChannelStart`, `onCast`, etc.) can execute custom logic while still benefiting from the core handler's functionality.
+
+## Design Trade-offs
+
+<Accordion title="What this system is good for">
+  - Building complex spell systems with casting, cooldowns, and charges
+  - Creating consistent gameplay mechanics across many abilities
+  - Rapid prototyping of new abilities by composing existing modules
+  - Large-scale projects where maintainability matters
+  - Risk of Rain-style stacking systems via Modifier Handler
+</Accordion>
+
+<Accordion title="What this system is NOT designed for">
+  - Simple one-off mechanics that don't need modularity
+  - Minimal MythicMobs setups (the system has overhead)
+  - Projects where every ability must be completely unique
+  - Users without basic MythicMobs knowledge (required for effective use)
+</Accordion>
+
+## Getting Started
+
+To effectively use the modular system:
+
+1. **Study the demo spells** in `Demo Skills/Demo Spells/`
+2. **Understand the Spell Handler** as it's the core of most interactions
+3. **Learn the parameter syntax** for passing data between modules
+4. **Experiment with nesting** to build complex behaviors
+
+<Note>
+The original creator notes: "I cannot say if I succeeded or failed in [centralizing gameplay logic]. Likely a bit of both." The system is powerful but has a learning curve—treat it as a primer to advanced MythicMobs usage.
+</Note>
+
+## Next Steps
+
+<Card title="Skill Parameters" icon="code" href="/concepts/skill-parameters">
+  Learn how to pass data between modules using the `<skill.parameter>` syntax
+</Card>
+
+<Card title="Nesting Modules" icon="layer-group" href="/concepts/nesting-modules">
+  Understand how to compose modules for complex behaviors
+</Card>

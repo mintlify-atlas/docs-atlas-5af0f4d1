@@ -1,0 +1,134 @@
+---
+title: Installation
+description: Set up IonTech's Modular Systems for MythicMobs
+---
+
+## Prerequisites
+
+Before installing IonTech's Modular Systems, ensure you have the following plugins installed on your server:
+
+- **MythicMobs Premium** (latest build)
+- **Crucible** (required for items)
+- **ModelEngine** (required for Model Modules, optional for other features)
+- **PlaceholderAPI** (required)
+
+<Note>
+  This framework requires MythicMobs Premium. The free version of MythicMobs will not work.
+</Note>
+
+## Installation Steps
+
+<Steps>
+  <Step title="Install Dependencies">
+    Download and install all required plugins listed above. Make sure you're running the latest build of MythicMobs Premium for best compatibility.
+  </Step>
+
+  <Step title="Configure MythicMobs">
+    Navigate to `MythicMobs/Config/config-skills.yml` and set the following options:
+
+    ```yaml
+    TargetArmorStands: true
+    TargetMarkers: true
+    ```
+
+    After making these changes, reload MythicMobs with `/mm reload`.
+
+    <Warning>
+      Both `TargetArmorStands` and `TargetMarkers` must be set to `true` for the modular system to function correctly.
+    </Warning>
+  </Step>
+
+  <Step title="Install PlaceholderAPI Expansions">
+    IonTech's Modular Systems requires two PlaceholderAPI expansions:
+
+    ```bash
+    /papi ecloud download Math
+    /papi ecloud download String
+    /papi reload
+    ```
+  </Step>
+
+  <Step title="Configure PlaceholderAPI">
+    Open `Plugins/PlaceholderAPI/config.yml` and add the following string replacements configuration. If a `string:` section already exists, merge these settings into it:
+
+    ```yaml
+    string:
+      replacements:
+        cleanup:
+          '_': ""
+        small-text:
+          '0': ₀
+          '1': ₁
+          '2': ₂
+          '3': ₃
+          '4': ₄
+          '5': ₅
+          '6': ₆
+          '7': ₇
+          '8': ₈
+          '9': ₉
+          a: ᴀ
+          b: ʙ
+          c: ᴄ
+          d: ᴅ
+          e: ᴇ
+          f: ғ
+          g: ɢ
+          h: ʜ
+          i: ɪ
+          j: ᴊ
+          k: ᴋ
+          l: ʟ
+          m: ᴍ
+          n: ɴ
+          o: ᴏ
+          p: ᴘ
+          q: ǫ
+          r: ʀ
+          s: s
+          t: ᴛ
+          u: ᴜ
+          v: ᴠ
+          w: ᴡ
+          x: x
+          y: ʏ
+          z: ᴢ
+        small-numbers:
+          '0': ₀
+          '1': ₁
+          '2': ₂
+          '3': ₃
+          '4': ₄
+          '5': ₅
+          '6': ₆
+          '7': ₇
+          '8': ₈
+          '9': ₉
+      separator: _
+    ```
+
+    After adding this configuration, reload PlaceholderAPI with `/papi reload`.
+  </Step>
+
+  <Step title="Install the Skill Pack">
+    Copy the `IonTech's Modular Systems` pack folder into your `MythicMobs/Packs/` directory.
+
+    Reload MythicMobs with `/mm reload` to load all the modular skills.
+  </Step>
+
+  <Step title="Verify Installation">
+    Check that everything loaded correctly:
+
+    ```bash
+    /mm skills list
+    ```
+
+    Look for skills like `spell-init`, `Spell`, and the demo spells (e.g., `burning_blast-cast`, `flame_flicker-cast`).
+  </Step>
+</Steps>
+
+## Next Steps
+
+Now that you've installed IonTech's Modular Systems, you're ready to start creating your own spells and abilities!
+
+Check out the [Quick Start](/quickstart) guide to build your first modular spell.

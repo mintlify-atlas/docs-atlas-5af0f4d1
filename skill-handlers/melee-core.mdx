@@ -1,0 +1,359 @@
+---
+title: 'Melee Core'
+description: 'Vanilla melee simulation with 1:1 behavior for knockback and damage using the moveset system'
+---
+
+The melee core provides **vanilla-accurate melee combat** that simulates Minecraft's native melee mechanics with 1:1 behavior for damage, knockback, and attack types.
+
+## Overview
+
+The melee system:
+
+- **Cancels vanilla damage** - Replaces default Minecraft melee with custom system
+- **Attack multiplier** - Scales damage by attack cooldown percentage
+- **Moveset integration** - Detects weak hits, crits, sprint attacks, uppercuts, and aerial attacks
+- **Vanilla knockback** - Replicates Minecraft's exact knockback behavior
+- **Ground detection** - Different knockback for grounded vs airborne targets
+
+## Basic Usage
+
+```yaml melee_core.yml:5
+Melee:
+  Skill: melee
+
+melee:
+  Skills:
+  - skill:Spell{id=melee-start;name=Melee;type=WEAPON;spellcd=0;displaycd=false} @self
+```
+
+Bind this to an item or mob's attack event:
+
+```yaml
+my_sword:
+  Skills:
+  - skill:melee @self
+```
+
+## Melee Start
+
+The entry point that cancels vanilla damage and sets up the attack:
+
+```yaml melee_core.yml:12
+melee-start:
+  Skills:
+  - cancelEvent{sync=true}
+  - setvar{var=damage;val="<skill.damage|<caster.damage>>";type=FLOAT} @self ?!varisset{var=damage}
+  - variableMath{var=damage;equation=x*<caster.attack_cooldown>}  # Scale by attack cooldown
+  
+  - setvarloc{var=knockback_direction;val=@forward{f=20;lockpitch=true}}
+  - skill:Moveset{maxmoveset=1;moveset_id=melee;
+    1=melee-sweep_damage;
+    weak=melee-weak_damage;
+    sprint=melee-sprint_damage;
+    crit=melee-critical_damage;
+    uppercut=melee-uppercut_damage;
+    aerial=melee-aerial} @self
+```
+
+### Key Features
+
+1. **cancelEvent** - Prevents vanilla damage from applying
+2. **attack_cooldown scaling** - Uses `<caster.attack_cooldown>` to scale damage (0.0-1.0)
+3. **knockback_direction** - Sets forward direction for knockback
+4. **Moveset detection** - Automatically detects attack type
+
+## Attack Types
+
+The moveset system detects different attack types:
+
+| Type | Trigger | Damage | Knockback |
+|------|---------|--------|----------|
+| **Sweep** | Full charge + multiple targets | 100% | Weak |
+| **Weak** | Partial charge | 100% | Weak |
+| **Sprint** | Sprinting | 100% | Strong |
+| **Critical** | Falling + full charge | 150% | Weak + effects |
+| **Uppercut** | Looking up | 100% | Vertical launch |
+| **Aerial** | In air | 150% | Strong + air chase |
+
+## Damage Variants
+
+### Sweep Attack
+
+```yaml melee_core.yml:28
+melee-sweep_damage:
+  Skills:
+  - skill:damage-weapon{immune=10;setid=false;
+    onHit=[ - vskill{s=knockback-melee_weak} ]} @trigger
+```
+
+### Weak Attack
+
+```yaml melee_core.yml:33
+melee-weak_damage:
+  Cooldown: 0.25
+  Skills:
+  - skill:damage-weapon{immune=10;setid=false;
+    onHit=[ - vskill{s=knockback-melee_weak} ]} @trigger
+```
+
+### Sprint Attack
+
+```yaml melee_core.yml:39
+melee-sprint_damage:
+  Skills:
+  - skill:damage-weapon{immune=10;setid=false;
+    onHit=[ - vskill{s=knockback-melee_strong} ]} @trigger
+```
+
+### Critical Attack
+
+```yaml melee_core.yml:44
+melee-critical_damage:
+  Skills:
+  - skill:damage-weapon{immune=10;
+    damageMod=[ - variableMath{var=damage;equation="x*1.5"} ];
+    onHit=[
+      - vskill{s=knockback-melee_critical}
+      - playAnimation{animation=4}  # Crit particles
+      ]} @trigger
+```
+
+### Uppercut Attack
+
+```yaml melee_core.yml:53
+melee-uppercut_damage:
+  Skills:
+  - skill:damage-weapon{immune=10;
+    onHit=[
+      - vskill{s=knockback-melee_uppercut}
+      ]} @trigger
+```
+
+### Aerial Attack
+
+```yaml melee_core.yml:60
+melee-aerial:
+  Skills:
+  - skill:damage-weapon{immune=10;
+    damageMod=[ - variableMath{var=damage;equation="x*1.5"} ];
+    onHit=[
+      - vskill{s=knockback-melee_critical}
+      - playAnimation{animation=4}
+      - vskill{s=air_chase;ticks=8} @self  # Chase airborne target
+      ]} @trigger
+```
+
+## Knockback Variants
+
+All knockback variants use vanilla-accurate values:
+
+### Weak Knockback
+
+```yaml melee_core.yml:82
+knockback-melee_weak:
+  Skills:
+  - skill:knockback{origin=@location{x=<caster.l.x.double>;y=<target.l.y.double>;z=<caster.l.z.double>};kb=1.25;kby=0.75;vertical=false} @targeted{conditions=[ - onGround ]}
+  - skill:knockback{origin=@location{x=<caster.l.x.double>;y=<target.l.y.double>;z=<caster.l.z.double>};kb=1.25;kby=-0.75;vertical=false} @targeted{conditions=[ - onGround false ]}
+  - sound{s=entity.player.attack.strong}
+```
+
+**Ground**: `kb=1.25`, `kby=0.75` (slight upward launch)
+
+**Airborne**: `kb=1.25`, `kby=-0.75` (push downward)
+
+### Strong Knockback
+
+```yaml melee_core.yml:88
+knockback-melee_strong:
+  Skills:
+  - skill:knockback{origin=@location{x=<caster.l.x.double>;y=<target.l.y.double>;z=<caster.l.z.double>};kb=1.5;kby=0.75;vertical=false} @targeted{conditions=[ - onGround ]}
+  - skill:knockback{origin=@location{x=<caster.l.x.double>;y=<target.l.y.double>;z=<caster.l.z.double>};kb=1.5;kby=-0.75;vertical=false} @targeted{conditions=[ - onGround false ]}
+  - sound{s=entity.player.attack.strong}
+  - sound{s=entity.player.attack.knockback}
+```
+
+**Ground**: `kb=1.5`, `kby=0.75` (stronger horizontal)
+
+**Airborne**: `kb=1.5`, `kby=-0.75` (stronger push down)
+
+### Critical Knockback
+
+```yaml melee_core.yml:95
+knockback-melee_critical:
+  Skills:
+  - skill{s=knockback-melee_weak}
+  - sound{s=entity.player.attack.crit}
+```
+
+Same as weak knockback but with crit sound.
+
+### Uppercut Knockback
+
+```yaml melee_core.yml:100
+knockback-melee_uppercut:
+  Skills:
+  - skill:knockback{origin=@location{x=<caster.l.x.double>;y=<target.l.y.double>;z=<caster.l.z.double>};kb=1.25;kby=1.6;vertical=false} @targeted
+  - sound{s=entity.player.attack.strong}
+  - sound{s=entity.player.attack.knockback}
+```
+
+**Always**: `kb=1.25`, `kby=1.6` (strong vertical launch)
+
+## Ground Detection
+
+Knockback changes based on whether the target is on the ground:
+
+```yaml
+@targeted{conditions=[ - onGround ]}  # Grounded targets
+@targeted{conditions=[ - onGround false ]}  # Airborne targets
+```
+
+- **Grounded**: Positive `kby` (launch upward)
+- **Airborne**: Negative `kby` (push downward)
+
+This replicates vanilla behavior of pushing falling enemies down.
+
+## Origin Point
+
+Knockback origin is set to the **horizontal position of the attacker** at the **vertical position of the target**:
+
+```yaml
+origin=@location{x=<caster.l.x.double>;y=<target.l.y.double>;z=<caster.l.z.double>}
+```
+
+This ensures knockback is always horizontal (not affected by height difference).
+
+## Attack Cooldown Scaling
+
+Damage scales with Minecraft's attack cooldown:
+
+```yaml melee_core.yml:17
+- variableMath{var=damage;equation=x*<caster.attack_cooldown>}
+```
+
+- `<caster.attack_cooldown>` = 0.0 to 1.0 (0% to 100% charged)
+- Partial swings deal reduced damage
+- Full charge deals 100% damage
+
+## Knockback Denial
+
+Targets with the `denykb` aura resist knockback:
+
+```yaml melee_core.yml:69
+knockback-melee:
+  TargetConditions:
+  - hasaura{aura=denykb} false
+```
+
+Give mobs knockback resistance:
+
+```yaml
+- aura{name=denykb;duration=999999;ma=true} @self
+```
+
+## Example: Custom Melee Weapon
+
+```yaml
+flaming_sword:
+  Skills:
+  - skill:melee @self
+  # Add custom effects on hit
+  - skill{s=[
+      - ignite{t=60} @trigger
+      - e:p{p=flame;a=20}
+    ]} @trigger
+```
+
+## Example: Melee with Custom Damage
+
+```yaml
+heavy_axe:
+  Skills:
+  - setvar{var=damage;val=20;type=FLOAT} @self  # Override base damage
+  - skill:melee @self
+```
+
+## Example: Disable Knockback
+
+```yaml
+no_knockback_melee:
+  Skills:
+  - skill{s=melee-start-no_kb} @self
+
+melee-start-no_kb:
+  Skills:
+  - cancelEvent{sync=true}
+  - setvar{var=damage;val="<caster.damage>";type=FLOAT} @self
+  - variableMath{var=damage;equation=x*<caster.attack_cooldown>}
+  - skill:damage-weapon{immune=10} @trigger  # No knockback callback
+```
+
+## Switch-Based Knockback
+
+The handler includes a switch-based knockback system:
+
+```yaml melee_core.yml:69
+knockback-melee:
+  TargetConditions:
+  - hasaura{aura=denykb} false
+  Skills:
+  - switch{condition=varequals{var=skill.hit;value=<case>};cases=
+        case WEAK=[ - skill{s=knockback-melee_weak} ]
+        case CRIT=[ - skill{s=knockback-melee_critical} ]
+        case SPRINT=[ - skill{s=knockback-melee_critical} ]
+        case UPPERCUT=[ - skill{s=knockback-melee_strong} ]
+        case AERIAL=[ - skill{s=knockback-melee_critical} ]
+        case DEFAULT=[ - skill{s=knockback-melee_strong} ]
+      }
+```
+
+This allows you to call a single skill and have it route to the correct knockback type.
+
+## Vanilla Parity
+
+The melee core achieves **1:1 vanilla behavior** by:
+
+1. **Canceling vanilla damage** - Prevents double damage
+2. **Attack cooldown scaling** - Matches vanilla charge system
+3. **Exact knockback values** - Replicates vanilla knockback strength
+4. **Ground detection** - Matches vanilla airborne knockback behavior
+5. **Critical effects** - Uses vanilla crit animation (playAnimation 4)
+6. **Sound effects** - Uses vanilla attack sounds
+
+## Integration with Other Systems
+
+### Damage Core
+
+Uses `damage-weapon` for weapon-tagged damage:
+
+```yaml
+- skill:damage-weapon{immune=10} @trigger
+```
+
+See [Damage Core](/skill-handlers/damage-core) for details.
+
+### Knockback Core
+
+Uses the knockback handler for physics:
+
+```yaml
+- skill:knockback{kb=1.5;kby=0.75;vertical=false} @targeted
+```
+
+See [Knockback Core](/skill-handlers/knockback-core) for details.
+
+### Spell Handler
+
+Wrapped in the spell system for consistency:
+
+```yaml
+- skill:Spell{id=melee-start;name=Melee;type=WEAPON;spellcd=0;displaycd=false} @self
+```
+
+See [Spell Casting Handler](/skill-handlers/spell-casting) for details.
+
+## Related Systems
+
+- [Damage Core](/skill-handlers/damage-core) - Handles weapon damage calculation
+- [Knockback Core](/skill-handlers/knockback-core) - Physics-based knockback system
+- [Spell Casting Handler](/skill-handlers/spell-casting) - Wraps melee in spell framework

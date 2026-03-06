@@ -1,0 +1,339 @@
+---
+title: 'Damage Core'
+description: 'Percentage-scaling damage system with unique damage instances and visual indicators'
+---
+
+The damage core system provides a flexible damage framework with **percentage-based scaling**, unique damage instance tracking, critical hit effects, and floating damage indicators.
+
+## Overview
+
+The damage core handles:
+
+- **Percentage scaling** - Display damage as percentage of base damage
+- **Unique damage IDs** - Prevent multi-hitting with iframe system
+- **Hit tracking** - Track which entities have been hit
+- **Damage indicators** - Floating text showing damage dealt
+- **Modifier integration** - Trigger PRE_DAMAGE and DAMAGE modifiers
+- **Critical effects** - Visual and audio feedback for crits
+
+## Damage Variants
+
+Three main damage skills with different tagging:
+
+| Skill | Tag | Triggers | Use Case |
+|-------|-----|----------|----------|
+| `damage` | None | DAMAGE | Generic damage |
+| `damage-weapon` | WEAPON | WEAPON_HIT, DAMAGE | Melee attacks |
+| `damage-ability` | ABILITY | ABILITY_HIT, DAMAGE | Spell abilities |
+
+## Basic Usage
+
+```yaml
+my_spell:
+  Skills:
+  - skill:damage{immune=10} @target
+
+my_melee:
+  Skills:
+  - skill:damage-weapon{immune=10} @target
+
+my_ability:
+  Skills:
+  - skill:damage-ability{immune=20} @target
+```
+
+## Core Parameters
+
+<ParamField path="immune" type="integer" default="5">
+  Duration in ticks that the target is immune to this specific damage instance. Prevents multi-hitting.
+  
+  ```yaml
+  immune=10  # 0.5 second immunity (10 ticks)
+  ```
+</ParamField>
+
+<ParamField path="damage_id" type="string" default="default">
+  Prefix for the damage immunity aura name. Use different IDs for damage that should bypass each other's immunity.
+  
+  ```yaml
+  damage_id=explosion  # Creates "explosion<randomid>" aura
+  ```
+</ParamField>
+
+<ParamField path="setid" type="boolean" default="false">
+  Force generation of a new random ID for this damage instance.
+  
+  ```yaml
+  setid=true
+  ```
+</ParamField>
+
+<ParamField path="damage_source" type="string" default="NONE">
+  Source type of the damage (informational).
+  
+  ```yaml
+  damage_source=FIRE
+  ```
+</ParamField>
+
+<ParamField path="damage_type" type="string">
+  Type of damage. Defaults to damage_source if not specified.
+  
+  ```yaml
+  damage_type=MAGIC,FIRE
+  ```
+</ParamField>
+
+## Callback Parameters
+
+<ParamField path="damageMod" type="metaskill" default="[]">
+  Metaskill executed before damage calculation. Use to modify the `damage` variable.
+  
+  ```yaml
+  damageMod=[ - variableMath{var=damage;equation="x*2.5"} ]
+  ```
+</ParamField>
+
+<ParamField path="preHit" type="metaskill" default="[]">
+  Metaskill executed after damage mods but before damage is dealt.
+  
+  ```yaml
+  preHit=[ - sound{s=entity.player.hurt} ]
+  ```
+</ParamField>
+
+<ParamField path="onHit" type="metaskill" default="[]">
+  Metaskill executed after damage is dealt.
+  
+  ```yaml
+  onHit=[
+    - ignite{t=80}
+    - knockback{kb=3}
+  ]
+  ```
+</ParamField>
+
+## Random ID System
+
+Each damage instance gets a unique random ID to prevent multi-hitting:
+
+```yaml setRandomID.yml:2
+setRandomID:
+  Skills:
+  - setvar{var=randomid;val="<caster.uuid>_<random.-65536to65536>";type=STRING} @self
+```
+
+The random ID is automatically generated if not set:
+
+```yaml damage_core.yml:69
+damage:
+  Skills:
+  - skill{s=damage-init}
+  - aura{name=<skill.damage_id|default><skill.var.randomid>;type=iframe;d=<skill.immune|5>;ma=true;rd=false;
+    os=[
+    - vskill{s=<skill.damageMod|[]>}
+    - vskill{s=damage-evaluate}
+    - damage{a=<skill.var.damage>;pi=true;pkb=true;ts=false}
+    ]}
+```
+
+## Damage Initialization
+
+```yaml damage_core.yml:1
+damage-init:
+  Skills:
+  - skill{s=setRandomID} ?!varisset{var=randomid}
+  - skill{s=setRandomID} ?comparevalue{v1=<skill.setid|false>;op===;v2=true}
+  
+  - setvar{var=damage_source;val=<skill.damage_source|NONE>;type=LIST}
+  - setvar{var=damage_type;val=<skill.damage_type|<skill.var.damage_source>>;type=LIST}
+  
+  - setvar{var=targeted;val=<target.uuid>;type=STRING} @targeted
+  - setvar{var=hit_list;val=<skill.var.targeted>;type=LIST} @targeted ?!varisset{var=hit_list}
+  - setvar{var=damage_percent;val=<skill.var.damage>/<skill.var.base_damage|<skill.var.damage>>*100;t=INTEGER}
+```
+
+## Hit Tracking
+
+Track multiple entities hit by the same ability:
+
+```yaml damage_core.yml:14
+damage-evaluate:
+  Skills:
+  - variableAdd{var=hit_list;val=<skill.var.targeted>} ?comparevalues{value1=<skill.var.hit_list.contains.<skill.var.targeted>>;operator===;value2=false}
+  - setvar{var=hit_count;val=<skill.var.hit_list.size>;type=INTEGER}
+```
+
+Access the hit list:
+
+```yaml
+- message{m="Hit <skill.var.hit_count> targets: <skill.var.hit_list>"} @self
+```
+
+## Percentage Damage Display
+
+Damage is calculated as a percentage of base damage:
+
+```yaml damage_core.yml:18
+- setvar{var=damage_percent;val=<skill.var.damage>/<skill.var.base_damage|<skill.var.damage>>*100;t=INTEGER}
+```
+
+Useful for showing damage scaling:
+
+```yaml
+my_spell:
+  Skills:
+  - setvar{var=base_damage;val=10;type=FLOAT} @self
+  - variableMath{var=damage;equation="x*2"}  # 200% damage
+  - skill:damage @target
+  # damage_percent will be 200
+```
+
+## Damage Indicators
+
+Floating text displays showing damage dealt:
+
+```yaml damage_core.yml:39
+damage_indicator:
+  Skills:
+  - setvarloc{var=damage_origin;val=@LOT{yo=1}}
+  
+  - setvar{var=bullet_text;val=<placeholder.damage_text>;type=STRING}
+  - setvar{var=bullet_scale;val=max(min(<skill.var.damage_percent>/200,4),min(max(<skill.var.damage_percent>/50,0.4),1));type=FLOAT}
+  
+  - setvar{var=bullet_x;val=(3*(<random.0to10>%2)-1)*<random.float.1to1.6>;type=FLOAT}
+  - setvar{var=bullet_y;val=1.5+(3*(<random.0to10>%2)-1)*<random.float.0.5to1.5>;type=FLOAT}
+  - setvar{var=bullet_z;val=(3*(<random.0to10>%2)-1)*<random.float.1to1.6>;type=FLOAT}
+  
+  - projectile{fo=true;origin=@variableLocation{var=damage_origin};ti=1;syo=0;sfo=0;i=1;hR=0;vR=0;se=true;sb=false;hnp=true;
+    ham=false;v=<skill.var.bullet_velocity>;d=12;
+    bullet=TEXT;bulletText=<skill.var.bullet_text>;bulletscale=<skill.var.bullet_scale>,<skill.var.bullet_scale>,<skill.var.bullet_scale>;
+    color=0,0,0,0;bulletBrightness=15;bulletBrightnessSky=15;bulletBillboard=CENTER;
+    onTick=[ - modifyProjectile{trait=VELOCITY;action=MULTIPLY;value=<skill.var.bullet_drag>} ]}
+```
+
+### Indicator Scaling
+
+Damage indicators automatically scale based on damage:
+
+- **50% damage or less**: Scale 0.4-1.0x
+- **100% damage**: Scale 1.0x
+- **200% damage or more**: Scale 1.0-4.0x
+
+## Critical Hit Effects
+
+```yaml damage_core.yml:26
+damage-critical:
+  Conditions:
+  - varequals{var=critical;val=true}
+  Skills:
+  - sound{s=entity.player.attack.crit;v=0.5;p=2;audience=caster} @self
+  - playAnimation{e=5}
+```
+
+Critical hits are calculated in the spell handler before damage is dealt.
+
+## Modifier Integration
+
+The damage core triggers modifiers at key points:
+
+```yaml damage_core.yml:21
+- vskill{s=modifier-trigger;trigger=PRE_DAMAGE}
+```
+
+```yaml damage_core.yml:81
+- vskill{s=modifier-trigger;trigger=DAMAGE}
+```
+
+Use modifiers to alter damage:
+
+```yaml
+modifier-damage_boost:
+  Skills:
+  - variableMath{var=damage;equation='x*1.5'}  # +50% damage
+```
+
+## Example: Basic Damage
+
+```yaml
+fireball-hit:
+  Skills:
+  - skill:damage{immune=20;
+    onHit=[
+      - ignite{t=60}
+      - sound{s=entity.generic.explode}
+    ]} @target
+```
+
+## Example: Scaled Damage
+
+```yaml frost_shard-hit_entity.yml:31
+frost_shard-hit_entity:
+  Skills:
+  - skill:damage-ability{immune=10;
+    damageMod=[ - variableMath{var=damage;equation="x*0.25"} ];
+    onHit=[ - freeze{t=20} ]}
+```
+
+This deals 25% of base damage and freezes for 1 second.
+
+## Example: Multi-Target Tracking
+
+```yaml
+chain_lightning:
+  Skills:
+  - skill{s=setRandomID}  # One ID for entire chain
+  - skill:damage{immune=20} @target
+  - message{m="Hit <skill.var.hit_count> targets so far"} @self
+  
+  # Chain to next target (uses same randomid)
+  - skill:chain_lightning @EIR{r=5;limit=1}
+```
+
+## Example: Custom Damage Indicator
+
+```yaml
+my_custom_damage:
+  Skills:
+  - skill:damage{onHit=[
+      - vskill{s=damage_indicator;damage=<skill.var.damage.precision.1>}
+    ]}
+```
+
+## Ability-Specific Features
+
+`damage-ability` includes additional effects:
+
+```yaml damage_core.yml:121
+- vskill{s=Suspend}  # Suspend animation
+- aura{name=stagger;duration=10;ma=true}  # Stagger effect
+```
+
+## Sudo Damage
+
+For advanced use cases, `damage-sudo` executes damage from the parent entity:
+
+```yaml damage_core.yml:135
+damage-sudo:
+  Skills:
+  - skill{branch=true;s=[
+    - setvar{var=target_uuid;val=<target.uuid>;type=STRING}
+    - sudoskill{s=[
+        - skill{s=setRandomID} ?!varisset{var=randomid}
+        - aura{name=<skill.damage_id|default><skill.var.randomid>;type=iframe;d=<skill.immune|5>;ma=true;rd=false;
+          os=[
+          - vskill{s=damage-evaluate}
+          - vskill{s=<skill.onHit|damage-hit_entity>}
+        ]} @uuid{u=<skill.var.target_uuid>}
+      ]} @parent
+    ]}
+```
+
+Useful for projectiles or summons dealing damage on behalf of the caster.
+
+## Related Systems
+
+- [Spell Casting Handler](/skill-handlers/spell-casting) - Integrates damage with spell system
+- [Modifier Handler](/skill-handlers/modifier-handler) - Modify damage with buffs/debuffs
+- [Knockback Core](/skill-handlers/knockback-core) - Add knockback to damage hits
+- [Melee Core](/skill-handlers/melee-core) - Vanilla-accurate melee damage

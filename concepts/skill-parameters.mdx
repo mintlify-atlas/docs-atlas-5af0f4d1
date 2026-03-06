@@ -1,0 +1,445 @@
+---
+title: Skill Parameters
+description: Learn how to pass data between modules using skill parameters
+---
+
+## Overview
+
+Skill parameters are the backbone of IonTech's Modular Systems. They allow you to pass configuration data from one skill to another using the `<skill.parameter>` syntax, making modules flexible and reusable.
+
+<Note>
+Parameters are set when calling a skill and accessed within that skill using `<skill.varname>` placeholders.
+</Note>
+
+## Basic Syntax
+
+### Setting Parameters
+
+When calling a module, pass parameters inside curly braces:
+
+```yaml
+my_spell:
+  Skills:
+  - skill:Spell{id=my_spell;
+      name=My Awesome Spell;
+      spellcd=100;
+      warmup=40;
+      damage=50}
+```
+
+### Accessing Parameters
+
+Inside the called skill, access parameters with `<skill.parameter>`:
+
+```yaml
+spell-init:
+  Skills:
+  - setvar{var=id;val=<skill.id|unset>;type=METASKILL}
+  - setvar{var=name;val=<skill.name|Unknown>;type=STRING}
+```
+
+### Default Values
+
+Use the pipe `|` operator to provide fallback values:
+
+```yaml
+# If <skill.name> is not provided, use "Unknown"
+- setvar{var=name;val=<skill.name|Unknown>;type=STRING}
+
+# Multiple fallbacks: try <skill.spell>, then "Unknown"
+- setvar{var=name;val=<skill.name|<skill.spell|Unknown>>}
+```
+
+## Common Parameter Patterns
+
+### Core Spell Parameters
+
+The Spell Handler uses these fundamental parameters:
+
+<Tabs>
+  <Tab title="Identity">
+    ```yaml
+    - skill:Spell{id=my_spell;        # Unique identifier
+        name=My Spell;                 # Display name
+        type=ABILITY,FIRE}             # Spell categories
+    ```
+    
+    **Usage:**
+    - `id` - Creates unique auras for cooldowns (`<id>-cd`) and tracking
+    - `name` - Shown in cooldown messages and channel bars
+    - `type` - Can be used for categorization and modifier triggers
+  </Tab>
+  
+  <Tab title="Cooldown">
+    ```yaml
+    - skill:Spell{spellcd=100;         # Cooldown in ticks (20 ticks = 1 second)
+        displaycd=true}                # Show cooldown messages
+    ```
+    
+    **Aliases:**
+    - `spellcd` = `cd` = spell cooldown duration
+    - `displaycd` = `showcd` = toggle cooldown display
+    
+    **How it works:**
+    ```yaml
+    spell-cooldown:
+      Skills:
+      - aura{name="<skill.id>-cd";
+          duration=<skill.spell_cooldown|20>;
+          bartimertext="<skill.var.name> <placeholder.cd>..."}
+    ```
+  </Tab>
+  
+  <Tab title="Warmup">
+    ```yaml
+    - skill:Spell{warmup=60;           # Channel time in ticks
+        interrupt=1}                   # Damage threshold to interrupt
+    ```
+    
+    **How it works:**
+    - If `warmup > 0`, the spell enters channeling state
+    - A terminable aura tracks the channel duration
+    - If accumulated damage exceeds `interrupt`, casting is cancelled
+    
+    ```yaml
+    spell-channel-begin:
+      Skills:
+      - terminable{name=<skill.var.id>-channel;
+          duration=<skill.var.warmup>;
+          type=channel;
+          oe=spell-channel-cast_logic}
+    ```
+  </Tab>
+  
+  <Tab title="Charges">
+    ```yaml
+    - skill:Spell{charges=3;           # Maximum charges
+        chargecd=40;                   # Ticks per charge regen
+        chargedelay=10}                # Delay before regen starts
+    ```
+    
+    **How it works:**
+    - If `charges > 0`, the spell uses a charge system
+    - Each cast consumes one charge
+    - After `chargedelay`, charges regenerate every `chargecd` ticks
+    
+    ```yaml
+    spell-charges-cast:
+      Skills:
+      - setvar{var=caster.<skill.var.id>-charges;
+          val="<caster.var.<skill.var.id>-charges>-1"}
+      - skill{s=spell-charges-recharge_delay}
+    ```
+  </Tab>
+</Tabs>
+
+### Callback Parameters
+
+The Spell Handler supports callback parameters for custom logic:
+
+```yaml
+burning_blast-cast:
+  Skills:
+  - skill:Spell{id=burning_blast;
+      onChannelStart=burning_blast-exec;     # Runs when channeling starts
+      onChannelTick=custom_tick_fx;          # Runs each tick while channeling
+      onCast=custom_cast_effect;             # Runs on successful cast
+      onCooldownEnd=custom_cooldown_end}     # Runs when cooldown expires
+```
+
+**Available callbacks:**
+
+<Accordion title="Full callback list from spell_handler.yml">
+  ```yaml
+  onChannelStart   # (os) - Executed when channeling begins
+  onChannelTick    # (ot) - Executed each tick during channeling
+  onInterrupt      # (oi) - Executed when channel is interrupted
+  onForceInterrupt # (ofi) - Executed on damage-based interrupt
+  onManualInterrupt # (omi) - Executed on player-cancelled channel
+  onCast           # (oc) - Executed when spell successfully casts
+  onCooldownCast   # (occ) - Executed when trying to cast on cooldown
+  onCooldownEnd    # (oce) - Executed when cooldown expires
+  ```
+  
+  Most have short aliases in parentheses (e.g., `os` instead of `onChannelStart`).
+</Accordion>
+
+### Real Example: Burning Blast
+
+Let's examine how the demo spell `burning_blast` uses parameters:
+
+```yaml
+burning_blast-cast:
+  Skills:
+  - skill:Spell{id=burning_blast;              # Unique ID for tracking
+      name=Burning Blast;                       # Display name
+      type=ABILITY;                             # Spell category
+      spellcd=3;                                # 3 second cooldown (60 ticks)
+      warmup=0.6;                               # 0.6 second channel (12 ticks)
+      onChannelStart=burning_blast-exec;        # Fire projectile when channel starts
+      onChannelTick=[                           # Custom tick behavior
+        - vskill{s=channel-tick_fx}             # Default VFX
+        - potion{t=SLOWNESS;l=2;duration=4}     # Slow player while casting
+      ]} @self
+```
+
+**What happens:**
+
+1. Player casts the spell
+2. Spell Handler reads `warmup=0.6` (12 ticks)
+3. Enters channeling state with aura `burning_blast-channel`
+4. Immediately executes `onChannelStart=burning_blast-exec` (fires projectile)
+5. Each tick, runs `onChannelTick` (plays VFX and applies slowness)
+6. After 12 ticks, executes the spell's main logic
+7. Applies cooldown `burning_blast-cd` for 60 ticks (3 seconds)
+
+## Advanced Parameter Usage
+
+### Nested Parameter Access
+
+Parameters can reference variables set by previous skills:
+
+```yaml
+spell-cooldown:
+  Skills:
+  - aura{name="<skill.id>-cd";                 # Access parameter directly
+      duration=<skill.spell_cooldown|20>;       # With default value
+      bartimertext="<skill.var.name> ..."       # Access variable set earlier
+```
+
+Notice:
+- `<skill.id>` - Direct parameter access
+- `<skill.var.name>` - Access variable set by `spell-init`
+
+### Parameter Aliases
+
+Many parameters have multiple names for convenience:
+
+```yaml
+spell-init:
+  Skills:
+  # These are equivalent:
+  - setvar{var=displaycd;val=<skill.displaycd|<skill.showcd|true>>}
+  - setvar{var=name;val=<skill.name|<skill.spell|Unknown>>}
+```
+
+**Common aliases:**
+- `spellcd` = `cd`
+- `displaycd` = `showcd`
+- `statMapSkill` = `sms`
+- `onChannelStart` = `os`
+- `onChannelTick` = `ot`
+- `onCast` = `oc`
+
+### List Parameters
+
+Parameters can be lists, useful for categories or multiple values:
+
+```yaml
+- skill:Spell{type=ABILITY,FIRE,AOE}
+
+# Inside the skill:
+- setvar{var=type;val=<skill.type|<skill.category|Unknown>>;type=LIST}
+```
+
+### MetaSkill Parameters
+
+Parameters can reference other skills to execute:
+
+```yaml
+spell-init:
+  Skills:
+  - setvar{var=onCast;val=<skill.onCast|channel-cast_fx>;type=METASKILL}
+  
+# Later, execute the referenced skill:
+spell-channel-cast_logic:
+  Skills:
+  - vskill{s=<skill.var.onCast>}
+```
+
+## Damage Core Parameters
+
+The Damage Core module uses a different parameter pattern:
+
+```yaml
+frost_shard-hit_entity:
+  Skills:
+  - skill:damage-ability{immune=10;                    # Damage immunity frames
+      damageMod=[ - variableMath{var=damage;equation="x*0.25"} ];  # Modify damage
+      onHit=[                                           # Execute on hit
+      - freeze{t=20}
+      ]}
+```
+
+**Key parameters:**
+
+<Tabs>
+  <Tab title="immune">
+    ```yaml
+    immune=10  # Damage immunity duration in ticks
+    ```
+    
+    Prevents the same damage instance from hitting the target multiple times.
+    
+    ```yaml
+    damage-ability:
+      Skills:
+      - aura{name=<skill.damage_id|default><skill.var.randomid>;
+          type=iframe;
+          d=<skill.immune|5>}
+    ```
+  </Tab>
+  
+  <Tab title="damageMod">
+    ```yaml
+    damageMod=[ - variableMath{var=damage;equation="x*2.5"} ]
+    ```
+    
+    Modifies the base damage value before dealing damage. Uses MythicMobs inline skill syntax `[ - skill ]`.
+    
+    **Common patterns:**
+    - `x*0.25` - 25% base damage
+    - `x*2.5` - 250% base damage  
+    - `x*1.75` - 175% base damage
+    
+    ```yaml
+    damage-ability:
+      Skills:
+      - aura{os=[
+        - vskill{s=<skill.damageMod|[]>}     # Execute damage modifier
+        - vskill{s=damage-evaluate}           # Then calculate final damage
+        - damage{a=<skill.var.damage>}        # Deal modified damage
+      ]}
+    ```
+  </Tab>
+  
+  <Tab title="onHit">
+    ```yaml
+    onHit=[
+      - freeze{t=20}
+      - ignite{t=80}
+      - vskill{s=knockback;v=2;vy=0.5}
+    ]
+    ```
+    
+    Executes skills after damage is dealt. Perfect for status effects, knockback, or chaining modules.
+    
+    ```yaml
+    damage-ability:
+      Skills:
+      - aura{os=[
+        - damage{a=<skill.var.damage>}
+        - vskill{s=<skill.onHit|[]>}         # Execute hit effects
+        - vskill{s=damage_indicator}
+      ]}
+    ```
+  </Tab>
+</Tabs>
+
+## Knockback Core Parameters
+
+The Knockback Core shows another parameter pattern:
+
+```yaml
+glacial_spikes-hit_entity:
+  Skills:
+  - skill:damage-ability{
+      onHit=[
+      - vskill{s=knockback;v=2;vy=0.5;vertical=false}
+      ]}
+```
+
+**Parameters:**
+- `v` / `kb` / `velocity` - Horizontal knockback strength
+- `vy` / `kby` / `velocityy` - Vertical knockback strength  
+- `vertical` - Whether to apply vertical component (default: true)
+
+```yaml
+knockback-init:
+  Skills:
+  - setvar{var=kb;val=<skill.velocity|<skill.v|<skill.kb|0>>>}
+  - setvar{var=kby;val=<skill.velocityy|<skill.vy|<skill.kby|0>>>}
+  - setvar{var=vertical;val=<skill.vertical|true>}
+```
+
+Notice the multiple fallback chain: `<skill.velocity|<skill.v|<skill.kb|0>>>`
+
+## Parameter Best Practices
+
+<Note>
+**Always provide defaults** for optional parameters using the `|` operator. This prevents errors when parameters aren't specified.
+</Note>
+
+### 1. Use Descriptive Names
+
+```yaml
+# Good
+- skill:Spell{id=fire_blast;name=Fire Blast;spellcd=100}
+
+# Bad
+- skill:Spell{id=fb;name=FB;cd=100}
+```
+
+### 2. Group Related Parameters
+
+```yaml
+# Good - grouped logically
+- skill:Spell{id=my_spell;name=My Spell;type=ABILITY;  # Identity
+    spellcd=100;displaycd=true;                         # Cooldown
+    warmup=40;interrupt=1;                              # Channeling
+    charges=3;chargecd=40;chargedelay=10}               # Charges
+
+# Bad - random order
+- skill:Spell{warmup=40;id=my_spell;charges=3;name=My Spell;spellcd=100}
+```
+
+### 3. Document Custom Parameters
+
+```yaml
+# If creating a custom module:
+my_custom_module:
+  # Parameters:
+  # - radius: Effect radius (default: 5)
+  # - duration: Effect duration in ticks (default: 100)
+  # - color: Particle color in hex (default: #ffffff)
+  Skills:
+  - setvar{var=radius;val=<skill.radius|5>}
+  - setvar{var=duration;val=<skill.duration|100>}
+  - setvar{var=color;val=<skill.color|#ffffff>}
+```
+
+### 4. Use Aliases for Common Parameters
+
+Provide multiple ways to specify the same parameter:
+
+```yaml
+# Accept both 'cd' and 'cooldown'
+- setvar{var=cooldown;val=<skill.cd|<skill.cooldown|20>>}
+
+# Accept both 'dmg' and 'damage'
+- setvar{var=damage;val=<skill.dmg|<skill.damage|10>>}
+```
+
+## Debugging Parameters
+
+Use the `debug` parameter to troubleshoot:
+
+```yaml
+- skill:Spell{id=my_spell;debug=true}
+
+# In spell-init:
+- setvar{var=debug;val=<skill.debug|false>;type=STRING}
+
+# Later:
+- message{m="Casting <skill.var.id> with damage <skill.var.damage>"} ?varequals{var=debug;val=true}
+```
+
+## Next Steps
+
+<Card title="Nesting Modules" icon="layer-group" href="/concepts/nesting-modules">
+  Learn how to combine modules for complex behaviors
+</Card>
+
+<Card title="Modular Design" icon="puzzle-piece" href="/concepts/modular-design">
+  Understand the philosophy behind the modular system
+</Card>
