@@ -1,0 +1,120 @@
+{
+  "projectType": "framework",
+  "projectName": "IonTech's Modular Systems",
+  "projectDescription": "A modular framework for MythicMobs that provides reusable gameplay systems and logic for Minecraft servers.",
+  "theme": "aspen",
+  "primaryColor": "#8B5CF6",
+  "lightColor": "#A78BFA",
+  "darkColor": "#6D28D9",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/modular-design",
+              "concepts/skill-parameters",
+              "concepts/nesting-modules"
+            ]
+          },
+          {
+            "group": "Input Handlers",
+            "pages": [
+              "input-handlers/weapon-movesets",
+              "input-handlers/click-combos",
+              "input-handlers/spell-cycling",
+              "input-handlers/hit-evaluation"
+            ]
+          },
+          {
+            "group": "Skill Handlers",
+            "pages": [
+              "skill-handlers/spell-casting",
+              "skill-handlers/modifier-handler",
+              "skill-handlers/damage-core",
+              "skill-handlers/knockback-core",
+              "skill-handlers/melee-core"
+            ]
+          },
+          {
+            "group": "Skill Mechanics",
+            "pages": [
+              "skill-mechanics/advanced-slashes",
+              "skill-mechanics/projectiles",
+              "skill-mechanics/stuns",
+              "skill-mechanics/vectors",
+              "skill-mechanics/particles",
+              "skill-mechanics/healing"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/demo-spells",
+              "examples/weapon-combos",
+              "examples/custom-items"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Skills",
+            "pages": [
+              "api/skills/input-mechanics",
+              "api/skills/handlers",
+              "api/skills/mechanics"
+            ]
+          },
+          {
+            "group": "Items & Mobs",
+            "pages": [
+              "api/items",
+              "api/mobs"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Weapon Movesets - Create flowing attack combos with vanilla integration",
+    "Click Combos - Wynncraft-style click combination casting system",
+    "Spell Casting Handler - Manages cooldowns, charges, casting VFX, and stats",
+    "Modifier Handler - Stack custom buffs, debuffs, and modular skills",
+    "Damage Core - Percentage-scaling damage with damage indicators",
+    "Knockback Core - Consistent, deterministic directional knockback",
+    "Advanced Slashes - Handler for creating slash effects with accurate hitboxes",
+    "Projectile Skills - Fire multiple projectiles with piercing and spread patterns"
+  ],
+  "publicApiSurface": [
+    "spell-init - Initialize spell variables and parameters",
+    "spell - Main spell casting entry point",
+    "spell_handler.yml - Core spell casting system",
+    "modifier_handler.yml - Buff/debuff stacking system",
+    "damage_core.yml - Custom damage calculation system",
+    "knockback_core.yml - Deterministic knockback system",
+    "melee_core.yml - Vanilla melee simulation",
+    "click_combo-mechanic-skills.yml - Click combination system",
+    "moveset-mechanic-skills.yml - Weapon moveset system",
+    "spell-cycle-skills.yml - Spell cycling system",
+    "advanced_slash-mechanic.yml - Slash effects handler",
+    "projectile-skills.yml - Projectile firing system",
+    "stun-mechanic.yml - Custom stun system",
+    "vector-skills.yml - Vector math utilities",
+    "particle_spiral-vfx.yml - Spiral particle effects",
+    "particle_shockwave-vfx.yml - Shockwave particle effects"
+  ]
+}
